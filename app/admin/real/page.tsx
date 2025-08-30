@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Plus, Save, ExternalLink, Verified, Clock, TrendingUp, LogOut } from 'lucide-react'
+import { Plus, Save, ExternalLink, Verified, Clock, TrendingUp, LogOut, Edit, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { isLoggedIn, logout, getStoredToken } from '../../../lib/auth'
 
@@ -33,6 +33,8 @@ export default function RealPostsAdmin() {
   const [checking, setChecking] = useState(true)
   const [posts, setPosts] = useState<RealPost[]>([])
   const [loading, setLoading] = useState(false)
+  const [editingPost, setEditingPost] = useState<RealPost | null>(null)
+  const [showEditModal, setShowEditModal] = useState(false)
   const [newPost, setNewPost] = useState<Partial<RealPost>>({
     platform: 'weibo',
     text: '',
@@ -259,6 +261,83 @@ export default function RealPostsAdmin() {
     }
   }
 
+  const handleEditPost = (post: RealPost) => {
+    console.log('Editing post:', post)
+    setEditingPost({
+      ...post,
+      media: post.media || []
+    })
+    setShowEditModal(true)
+  }
+
+  const handleUpdatePost = async () => {
+    if (!editingPost) return
+
+    try {
+      console.log('Original editing post:', editingPost)
+      
+      // Convert media from simple URLs to complex objects
+      const convertedMedia = editingPost.media.map(mediaItem => {
+        if (typeof mediaItem === 'string') {
+          return {
+            type: 'image' as const,
+            src: mediaItem,
+            originalSrc: mediaItem,
+            alt: 'Kelly Yu Wenwen post media'
+          }
+        }
+        
+        let url = (mediaItem as any).src || (mediaItem as any).originalSrc || ''
+        if (url.includes('/api/media-proxy?url=')) {
+          const urlParam = url.split('/api/media-proxy?url=')[1]
+          url = decodeURIComponent(urlParam)
+        }
+        
+        return {
+          type: (mediaItem as any).type || 'image',
+          src: url,
+          originalSrc: url,
+          alt: 'Kelly Yu Wenwen post media'
+        }
+      })
+      
+      console.log('Converted media for saving:', convertedMedia)
+      
+      const updateData = {
+        ...editingPost,
+        media: convertedMedia,
+        publishedAt: editingPost.publishedAt ? new Date(editingPost.publishedAt).toISOString() : new Date().toISOString()
+      }
+      
+      console.log('Final update data being sent:', updateData)
+
+      const token = getStoredToken()
+      const response = await fetch('/api/posts/real', {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updateData)
+      })
+
+      const result = await response.json()
+      console.log('Update response:', result)
+
+      if (response.ok) {
+        await fetchRealPosts() // Refresh the posts
+        setEditingPost(null)
+        setShowEditModal(false)
+        alert('✅ Post updated successfully!')
+      } else {
+        alert(`❌ Failed to update post: ${result.error}`)
+      }
+    } catch (error) {
+      console.error('Error updating post:', error)
+      alert('❌ Error updating post')
+    }
+  }
+
   const handleDeletePost = async (postId: string) => {
     if (!confirm('Are you sure you want to delete this post? This cannot be undone.')) {
       return
@@ -374,6 +453,24 @@ export default function RealPostsAdmin() {
           </h2>
 
           <div className="space-y-4">
+            {/* Platform Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Platform
+              </label>
+              <select
+                value={newPost.platform || 'weibo'}
+                onChange={(e) => setNewPost(prev => ({ ...prev, platform: e.target.value as RealPost['platform'] }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
+              >
+                <option value="weibo">Weibo</option>
+                <option value="douyin">Douyin</option>
+                <option value="red">Rednotes</option>
+                <option value="instagram">Instagram</option>
+                <option value="sohu">Sohu Video</option>
+              </select>
+            </div>
+
             {/* Weibo URL with Auto-Fetch */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -668,6 +765,13 @@ export default function RealPostsAdmin() {
                         <ExternalLink size={16} />
                       </a>
                       <button
+                        onClick={() => handleEditPost(post)}
+                        className="text-blue-500 hover:text-blue-700 flex-shrink-0 p-1 hover:bg-blue-50 rounded"
+                        title="Edit post"
+                      >
+                        <Edit size={16} />
+                      </button>
+                      <button
                         onClick={() => handleDeletePost(post.id)}
                         className="text-red-500 hover:text-red-700 flex-shrink-0 p-1 hover:bg-red-50 rounded"
                         title="Delete post"
@@ -754,6 +858,197 @@ export default function RealPostsAdmin() {
             </div>
           </div>
         </div>
+
+        {/* Edit Modal */}
+        {showEditModal && editingPost && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold flex items-center">
+                    <Edit size={20} className="mr-2 text-blue-500" />
+                    Edit Post
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setShowEditModal(false)
+                      setEditingPost(null)
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Platform */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Platform</label>
+                    <select
+                      value={editingPost.platform}
+                      onChange={(e) => setEditingPost(prev => prev ? { ...prev, platform: e.target.value as RealPost['platform'] } : null)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="weibo">Weibo</option>
+                      <option value="douyin">Douyin</option>
+                      <option value="red">Rednotes</option>
+                      <option value="instagram">Instagram</option>
+                      <option value="sohu">Sohu Video</option>
+                    </select>
+                  </div>
+
+                  {/* Text */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Post Text</label>
+                    <textarea
+                      value={editingPost.text}
+                      onChange={(e) => setEditingPost(prev => prev ? { ...prev, text: e.target.value } : null)}
+                      rows={4}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  {/* Media URLs */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Media URLs</label>
+                    {editingPost.media.map((mediaItem, index) => {
+                      const mediaUrl = typeof mediaItem === 'string' ? mediaItem : 
+                        (mediaItem.src?.includes('/api/media-proxy?url=') ? 
+                          decodeURIComponent(mediaItem.src.split('/api/media-proxy?url=')[1]) : 
+                          mediaItem.src || '')
+                      
+                      return (
+                        <div key={index} className="flex items-center space-x-2 mb-2">
+                          <input
+                            type="url"
+                            value={mediaUrl}
+                            onChange={(e) => {
+                              const updatedMedia = [...editingPost.media]
+                              if (typeof updatedMedia[index] === 'string') {
+                                updatedMedia[index] = e.target.value
+                              } else {
+                                updatedMedia[index] = {
+                                  ...updatedMedia[index] as any,
+                                  src: e.target.value,
+                                  originalSrc: e.target.value
+                                }
+                              }
+                              setEditingPost(prev => prev ? { ...prev, media: updatedMedia } : null)
+                            }}
+                            placeholder="https://example.com/image.jpg"
+                            className="flex-1 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-blue-500"
+                          />
+                          <button
+                            onClick={() => {
+                              const updatedMedia = editingPost.media.filter((_, i) => i !== index)
+                              setEditingPost(prev => prev ? { ...prev, media: updatedMedia } : null)
+                            }}
+                            className="px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )
+                    })}
+                    <button
+                      onClick={() => {
+                        const updatedMedia = [...editingPost.media, '']
+                        setEditingPost(prev => prev ? { ...prev, media: updatedMedia } : null)
+                      }}
+                      className="px-3 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 text-sm"
+                    >
+                      Add Media URL
+                    </button>
+                  </div>
+
+                  {/* Original URL */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Original URL</label>
+                    <input
+                      type="url"
+                      value={editingPost.url}
+                      onChange={(e) => setEditingPost(prev => prev ? { ...prev, url: e.target.value } : null)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  {/* Published Date */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Published Date</label>
+                    <input
+                      type="datetime-local"
+                      value={editingPost.publishedAt ? new Date(editingPost.publishedAt).toISOString().slice(0, 16) : ''}
+                      onChange={(e) => setEditingPost(prev => prev ? { 
+                        ...prev, 
+                        publishedAt: e.target.value ? new Date(e.target.value).toISOString() : ''
+                      } : null)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  {/* Engagement */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Likes</label>
+                      <input
+                        type="number"
+                        value={editingPost.engagement?.likes || 0}
+                        onChange={(e) => setEditingPost(prev => prev ? {
+                          ...prev,
+                          engagement: { ...prev.engagement!, likes: parseInt(e.target.value) || 0 }
+                        } : null)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Comments</label>
+                      <input
+                        type="number"
+                        value={editingPost.engagement?.comments || 0}
+                        onChange={(e) => setEditingPost(prev => prev ? {
+                          ...prev,
+                          engagement: { ...prev.engagement!, comments: parseInt(e.target.value) || 0 }
+                        } : null)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Shares</label>
+                      <input
+                        type="number"
+                        value={editingPost.engagement?.shares || 0}
+                        onChange={(e) => setEditingPost(prev => prev ? {
+                          ...prev,
+                          engagement: { ...prev.engagement!, shares: parseInt(e.target.value) || 0 }
+                        } : null)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end space-x-3 mt-6 pt-4 border-t">
+                  <button
+                    onClick={() => {
+                      setShowEditModal(false)
+                      setEditingPost(null)
+                    }}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUpdatePost}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium flex items-center"
+                  >
+                    <Save size={16} className="mr-2" />
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

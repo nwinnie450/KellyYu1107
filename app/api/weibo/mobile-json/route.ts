@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
             'Referer': 'https://m.weibo.cn/',
             'X-Requested-With': 'XMLHttpRequest'
           },
-          timeout: 10000
+          signal: AbortSignal.timeout(10000),
         })
 
         if (!response.ok) {
@@ -62,6 +62,24 @@ export async function POST(request: NextRequest) {
 
         const data = await response.json()
         console.log(`📱 Mobile JSON response structure:`, Object.keys(data))
+        
+        // Enhanced debugging for image extraction
+        if (data && data.data) {
+          console.log('🔍 Data structure details:')
+          console.log('🔍 pic_ids:', data.data.pic_ids)
+          console.log('🔍 pic_urls:', data.data.pic_urls)
+          console.log('🔍 url_objects count:', data.data.url_objects?.length || 0)
+          console.log('🔍 pics:', data.data.pics)
+          console.log('🔍 images:', data.data.images)
+          console.log('🔍 thumbnail_pic:', data.data.thumbnail_pic)
+          console.log('🔍 bmiddle_pic:', data.data.bmiddle_pic)
+          console.log('🔍 original_pic:', data.data.original_pic)
+          
+          // Log url_objects structure if available
+          if (data.data.url_objects && data.data.url_objects.length > 0) {
+            console.log('🔍 First url_object structure:', JSON.stringify(data.data.url_objects[0], null, 2))
+          }
+        }
 
         // Parse mobile JSON structure
         if (data && data.data) {
@@ -120,7 +138,7 @@ export async function POST(request: NextRequest) {
         if (foundData) break
 
       } catch (error) {
-        console.log(`❌ Mobile JSON endpoint ${endpoint} failed:`, error.message)
+        console.log(`❌ Mobile JSON endpoint ${endpoint} failed:`, error instanceof Error ? error.message : String(error))
         continue
       }
     }
@@ -160,7 +178,7 @@ export async function POST(request: NextRequest) {
     console.error('Mobile JSON fetch error:', error)
     return NextResponse.json({
       success: false,
-      error: 'Mobile JSON fetch failed: ' + error.message
+      error: 'Mobile JSON fetch failed: ' + (error instanceof Error ? error.message : String(error))
     }, { status: 500 })
   }
 }
@@ -240,6 +258,79 @@ function extractPostFromData(data: any, originalUrl: string) {
         originalSrc: pic.large?.url || pic.url,
         alt: 'Kelly Yu Wenwen post image'
       })
+    }
+  }
+
+  // Method 4: Check for images in url_objects (common in newer Weibo posts)
+  if (data.url_objects && Array.isArray(data.url_objects)) {
+    console.log(`🔍 Checking ${data.url_objects.length} url_objects for image content`)
+    for (const urlObj of data.url_objects) {
+      // Look for image URLs in url_ori field
+      if (urlObj.url_ori && typeof urlObj.url_ori === 'string') {
+        const imageMatch = urlObj.url_ori.match(/https?:\/\/[^\s"'<>]*\.(jpg|jpeg|png|gif|webp)/i)
+        if (imageMatch) {
+          console.log('🖼️ Found image URL in url_ori:', imageMatch[0])
+          media.push({
+            type: 'image' as const,
+            src: imageMatch[0],
+            originalSrc: imageMatch[0],
+            alt: 'Kelly Yu Wenwen post image'
+          })
+        }
+      }
+      
+      // Check if url_object contains image data
+      if (urlObj.object && typeof urlObj.object === 'object') {
+        if (urlObj.object.object_type === 'image' || urlObj.object.scheme?.includes('image')) {
+          console.log('🖼️ Found image in object structure!')
+          if (urlObj.object.cover_image) {
+            media.push({
+              type: 'image' as const,
+              src: urlObj.object.cover_image,
+              originalSrc: urlObj.object.cover_image,
+              alt: 'Kelly Yu Wenwen post image'
+            })
+          }
+        }
+      }
+    }
+  }
+
+  // Method 5: Extract images from text content (fallback for embedded images)
+  if (data.text && typeof data.text === 'string') {
+    const imageMatches = data.text.match(/https?:\/\/[^\s"'<>]*\.(jpg|jpeg|png|gif|webp)/gi)
+    if (imageMatches && imageMatches.length > 0) {
+      console.log(`🖼️ Found ${imageMatches.length} image URLs in text content`)
+      for (const imageUrl of imageMatches) {
+        media.push({
+          type: 'image' as const,
+          src: imageUrl,
+          originalSrc: imageUrl,
+          alt: 'Kelly Yu Wenwen post image'
+        })
+      }
+    }
+  }
+
+  // Method 6: Check for legacy image fields
+  if (data.images && Array.isArray(data.images)) {
+    console.log(`🖼️ Found ${data.images.length} images in legacy images field`)
+    for (const img of data.images) {
+      if (typeof img === 'string') {
+        media.push({
+          type: 'image' as const,
+          src: img,
+          originalSrc: img,
+          alt: 'Kelly Yu Wenwen post image'
+        })
+      } else if (img.url) {
+        media.push({
+          type: 'image' as const,
+          src: img.url,
+          originalSrc: img.large_url || img.url,
+          alt: 'Kelly Yu Wenwen post image'
+        })
+      }
     }
   }
 
@@ -413,6 +504,47 @@ function extractPostFromData(data: any, originalUrl: string) {
     console.log('🎥 Found video in retweeted status:', videoInfo)
   }
 
+  // Additional image extraction methods for comprehensive coverage
+  // Method 7: Check for images in retweeted status
+  if (data.retweeted_status && data.retweeted_status.pic_ids && Array.isArray(data.retweeted_status.pic_ids)) {
+    console.log(`🖼️ Found ${data.retweeted_status.pic_ids.length} images in retweeted status`)
+    for (const picId of data.retweeted_status.pic_ids) {
+      const baseUrl = 'https://wx1.sinaimg.cn'
+      media.push({
+        type: 'image' as const,
+        src: `${baseUrl}/mw690/${picId}.jpg`,
+        originalSrc: `${baseUrl}/large/${picId}.jpg`,
+        alt: 'Kelly Yu Wenwen retweeted image'
+      })
+    }
+  }
+
+  // Method 8: Check for images in page_info (sometimes images are nested there)
+  if (data.page_info && data.page_info.pic) {
+    console.log('🖼️ Found image in page_info.pic:', data.page_info.pic)
+    media.push({
+      type: 'image' as const,
+      src: data.page_info.pic,
+      originalSrc: data.page_info.pic,
+      alt: 'Kelly Yu Wenwen page info image'
+    })
+  }
+
+  // Method 9: Check for images in annotations (sometimes media info is there)
+  if (data.annotations && Array.isArray(data.annotations)) {
+    for (const annotation of data.annotations) {
+      if (annotation.mobipage && annotation.mobipage.pic) {
+        console.log('🖼️ Found image in annotation.mobipage.pic:', annotation.mobipage.pic)
+        media.push({
+          type: 'image' as const,
+          src: annotation.mobipage.pic,
+          originalSrc: annotation.mobipage.pic,
+          alt: 'Kelly Yu Wenwen annotation image'
+        })
+      }
+    }
+  }
+
   // Extract engagement numbers
   const engagement = {
     likes: parseInt(data.attitudes_count || data.attitude_count || '0') || 0,
@@ -433,9 +565,25 @@ function extractPostFromData(data: any, originalUrl: string) {
   console.log(`📊 Final extraction results:`)
   console.log(`   Text: ${text.length} chars`)
   console.log(`   Media: ${media.length} items`)
+  
+  // Log image extraction summary
+  const imageCount = media.filter(m => m.type === 'image').length
+  const videoCount = media.filter(m => m.type === 'video').length
+  console.log(`   📸 Images: ${imageCount}`)
+  console.log(`   🎥 Videos: ${videoCount}`)
+  
   media.forEach((item, i) => {
     console.log(`   [${i}] Type: ${item.type}, Src: ${item.src?.substring(0, 50)}...`)
   })
+  
+  // If no images found, log a warning
+  if (imageCount === 0) {
+    console.log('⚠️ No images extracted! Available data keys for debugging:')
+    console.log('   Available keys:', Object.keys(data))
+    if (data.pic_ids) console.log('   pic_ids:', data.pic_ids)
+    if (data.pic_urls) console.log('   pic_urls:', data.pic_urls)
+    if (data.url_objects) console.log('   url_objects count:', data.url_objects.length)
+  }
 
   return {
     text: text,

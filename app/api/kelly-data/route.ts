@@ -19,10 +19,10 @@ async function fetchKellyData() {
       const rssText = await rssResponse.text()
       
       // Simple RSS parsing
-      const items = rssText.match(/<item>(.*?)<\/item>/gs) || []
+      const items = rssText.match(/<item>([\s\S]*?)<\/item>/g) || []
       
       if (items.length > 0) {
-        const posts = items.slice(0, 5).map((item, index) => {
+        const posts = items.slice(0, 5).map((item: string, index: number) => {
           const titleMatch = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)
           const linkMatch = item.match(/<link>(.*?)<\/link>/)
           const pubDateMatch = item.match(/<pubDate>(.*?)<\/pubDate>/)
@@ -35,9 +35,9 @@ async function fetchKellyData() {
             media: [],
             url: linkMatch ? linkMatch[1] : `https://weibo.com/u/${KELLY_WEIBO_UID}`,
             publishedAt: pubDateMatch ? new Date(pubDateMatch[1]).toISOString() : new Date().toISOString(),
-            likes: Math.floor(Math.random() * 20000) + 5000,
-            comments: Math.floor(Math.random() * 2000) + 500,
-            shares: Math.floor(Math.random() * 500) + 100,
+            likes: 0,
+            comments: 0,
+            shares: 0,
             source: 'rsshub'
           }
         })
@@ -50,7 +50,7 @@ async function fetchKellyData() {
       }
     }
   } catch (rssError) {
-    console.log('RSSHub failed:', rssError.message)
+    console.log('RSSHub failed:', rssError instanceof Error ? rssError.message : String(rssError))
   }
   
   // Method 2: Try alternative RSS services
@@ -71,7 +71,7 @@ async function fetchKellyData() {
           if (data.items && data.items.length > 0) {
             dataSources.push({
               source: 'alternative_rss',
-              posts: data.items.slice(0, 5).map((item, index) => ({
+              posts: data.items.slice(0, 5).map((item: any, index: number) => ({
                 id: `alt_${Date.now()}_${index}`,
                 platform: 'weibo',
                 author: 'Kelly Yu Wenwen',
@@ -79,9 +79,9 @@ async function fetchKellyData() {
                 media: [],
                 url: item.link || `https://weibo.com/u/${KELLY_WEIBO_UID}`,
                 publishedAt: item.pubDate || new Date().toISOString(),
-                likes: Math.floor(Math.random() * 15000) + 3000,
-                comments: Math.floor(Math.random() * 1500) + 300,
-                shares: Math.floor(Math.random() * 300) + 50,
+                likes: 0,
+                comments: 0,
+                shares: 0,
                 source: 'alternative_rss'
               })),
               success: true
@@ -94,7 +94,7 @@ async function fetchKellyData() {
       }
     }
   } catch (altError) {
-    console.log('Alternative RSS failed:', altError.message)
+    console.log('Alternative RSS failed:', altError instanceof Error ? altError.message : String(altError))
   }
   
   return dataSources
@@ -120,46 +120,18 @@ export async function GET(request: NextRequest) {
       })
     }
     
-    // Fallback to curated realistic posts
-    const curatedPosts = [
-      {
-        id: 'curated_1',
-        platform: 'weibo',
-        author: 'Kelly Yu Wenwen',
-        text: '最近在准备新的音乐项目，很兴奋能和大家分享！🎵 Working on new music, excited to share with everyone!',
-        media: [],
-        url: `https://weibo.com/u/${KELLY_WEIBO_UID}`,
-        publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-        likes: 18500,
-        comments: 1200,
-        shares: 450,
-        source: 'curated'
-      },
-      {
-        id: 'curated_2',
-        platform: 'weibo',
-        text: '今天的天气真好！分享一些生活中的小美好 ☀️ Beautiful weather today! Sharing some little joys from life',
-        media: [],
-        url: `https://weibo.com/u/${KELLY_WEIBO_UID}`,
-        publishedAt: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(), // 8 hours ago
-        likes: 12300,
-        comments: 800,
-        shares: 200,
-        source: 'curated'
-      }
-    ]
-    
+    // Fallback when no data sources are available
     return NextResponse.json({
       success: true,
-      data: curatedPosts,
-      source: 'curated',
+      data: [],
+      source: 'none',
       profile: `https://weibo.com/u/${KELLY_WEIBO_UID}`,
       lastUpdated: new Date().toISOString(),
-      note: 'Using curated content - real data sources unavailable due to authentication requirements'
+      note: 'Real data sources unavailable. No mock data is being used.'
     })
     
   } catch (error) {
-    console.error('Error fetching Kelly data:', error)
+    console.error('Error fetching Kelly data:', error instanceof Error ? error.message : String(error))
     
     return NextResponse.json({
       success: false,

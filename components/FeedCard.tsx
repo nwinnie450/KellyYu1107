@@ -10,6 +10,7 @@ interface MediaItem {
   src: string
   poster?: string
   alt?: string
+  isIframe?: boolean
 }
 
 interface Post {
@@ -117,7 +118,7 @@ export default function FeedCard({ post, onMediaClick }: FeedCardProps) {
         </div>
         
         <a
-          href={post.url}
+          href={post.url ?? undefined}
           target="_blank"
           rel="noopener noreferrer"
           className="p-2 hover:bg-white/50 rounded-full transition-colors"
@@ -132,9 +133,9 @@ export default function FeedCard({ post, onMediaClick }: FeedCardProps) {
         {/* Text Content */}
         {post.text && (
           <div className="mb-4">
-            <p className="text-gray-800 leading-relaxed text-sm sm:text-base">
+            <div className="text-gray-800 leading-relaxed text-sm sm:text-base">
               {formatText(post.text)}
-            </p>
+            </div>
           </div>
         )}
 
@@ -153,7 +154,7 @@ export default function FeedCard({ post, onMediaClick }: FeedCardProps) {
                       <div className="absolute inset-0 bg-gray-100 animate-pulse rounded-lg" />
                     )}
                     <img
-                      src={post.media[0].src}
+                      src={post.media[0].src ?? undefined}
                       alt={post.media[0].alt || `${post.author} post`}
                       className="w-full h-auto max-h-96 object-cover rounded-lg group-hover:scale-105 transition-transform duration-300"
                       onLoad={() => setImageLoaded(prev => ({ ...prev, 0: true }))}
@@ -161,32 +162,36 @@ export default function FeedCard({ post, onMediaClick }: FeedCardProps) {
                     />
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 rounded-lg" />
                   </div>
-                ) : post.media[0].isIframe ? (
-                  // Iframe video (Weibo H5 player)
+                ) : post.media[0]?.isIframe ? (
+                  // Video placeholder with link to original post (Weibo blocks iframe embedding)
                   <div className="relative">
-                    <iframe
-                      src={post.media[0].src}
-                      className="w-full h-80 rounded-lg"
-                      allow="autoplay; encrypted-media; picture-in-picture"
-                      allowFullScreen
-                      referrerPolicy="no-referrer-when-downgrade"
-                      style={{ border: 'none' }}
-                    />
+                    <a 
+                      href={post.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block"
+                    >
+                      <div className="w-full h-80 bg-gradient-to-br from-gray-900 to-gray-700 rounded-lg flex items-center justify-center group hover:from-blue-900 hover:to-blue-700 transition-all duration-300">
+                        <div className="text-center text-white">
+                          <div className="bg-white/20 rounded-full p-4 mb-4 group-hover:bg-white/30 transition-colors">
+                            <Play size={32} className="text-white ml-1" />
+                          </div>
+                          <p className="text-lg font-medium mb-2">Kelly Yu Wenwen Video</p>
+                          <p className="text-sm opacity-80">Click to watch on Weibo</p>
+                          <p className="text-xs opacity-60 mt-2">🎥 Original video content</p>
+                        </div>
+                      </div>
+                    </a>
                   </div>
                 ) : (
                   // Regular video file
                   <div className="relative">
                     <video
-                      src={post.media[0].src}
-                      poster={post.media[0].poster}
+                      src={`/api/media-proxy?url=${encodeURIComponent(post.media[0]?.src || '')}`}
+                      poster={post.media[0]?.poster}
                       className="w-full h-auto max-h-96 object-cover rounded-lg"
-                      muted
+                      controls
                     />
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors duration-300 rounded-lg">
-                      <div className="bg-white/90 rounded-full p-3 group-hover:scale-110 transition-transform duration-300">
-                        <Play size={24} className="text-gray-800 ml-1" />
-                      </div>
-                    </div>
                   </div>
                 )}
               </div>
@@ -211,7 +216,7 @@ export default function FeedCard({ post, onMediaClick }: FeedCardProps) {
                           <div className="absolute inset-0 bg-gray-100 animate-pulse rounded-lg" />
                         )}
                         <img
-                          src={media.src}
+                          src={media.src ?? undefined}
                           alt={media.alt || `${post.author} post ${index + 1}`}
                           className="w-full h-32 sm:h-40 object-cover group-hover:scale-105 transition-transform duration-300"
                           onLoad={() => setImageLoaded(prev => ({ ...prev, [index]: true }))}
@@ -233,7 +238,7 @@ export default function FeedCard({ post, onMediaClick }: FeedCardProps) {
                       <div className="relative">
                         {media.poster ? (
                           <img
-                            src={media.poster}
+                            src={media.poster ?? undefined}
                             alt={`${post.author} video ${index + 1}`}
                             className="w-full h-32 sm:h-40 object-cover group-hover:scale-105 transition-transform duration-300"
                           />
@@ -252,16 +257,11 @@ export default function FeedCard({ post, onMediaClick }: FeedCardProps) {
                       // Regular video file
                       <div className="relative">
                         <video
-                          src={media.src}
+                          src={`/api/media-proxy?url=${encodeURIComponent(media.src)}`}
                           poster={media.poster}
                           className="w-full h-32 sm:h-40 object-cover"
-                          muted
+                          controls
                         />
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors duration-300">
-                          <div className="bg-white/90 rounded-full p-2 group-hover:scale-110 transition-transform duration-300">
-                            <Play size={16} className="text-gray-800 ml-0.5" />
-                          </div>
-                        </div>
                       </div>
                     )}
                   </div>

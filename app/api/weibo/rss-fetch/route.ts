@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
             'User-Agent': 'Mozilla/5.0 (compatible; Kelly Updates Hub/1.0)',
             'Accept': 'application/rss+xml, application/xml, text/xml, application/json'
           },
-          timeout: 10000
+          signal: AbortSignal.timeout(10000)
         })
 
         if (!response.ok) {
@@ -100,14 +100,14 @@ export async function POST(request: NextRequest) {
                 postData = {
                   text: text,
                   url: linkMatch?.[1] || url,
-                  images: [],
+                  images: [] as string[],
                   publishedAt: pubDateMatch?.[1] || new Date().toISOString()
                 }
                 
                 // Enhanced image detection
                 const imgMatches = [
-                  ...item.match(/https?:\/\/[^\s"'<>]*sinaimg\.cn[^\s"'<>]*\.(jpg|jpeg|png|gif|webp)/gi) || [],
-                  ...item.match(/https?:\/\/[^\s"'<>]*weibo\.com[^\s"'<>]*\.(jpg|jpeg|png|gif|webp)/gi) || []
+                  ...(item.match(/https?:\/\/[^\s"'<>]*sinaimg\.cn[^\s"'<>]*\.(jpg|jpeg|png|gif|webp)/gi) || []),
+                  ...(item.match(/https?:\/\/[^\s"'<>]*weibo\.com[^\s"'<>]*\.(jpg|jpeg|png|gif|webp)/gi) || [])
                 ]
                 postData.images = [...new Set(imgMatches)]
                 
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
                   postData = {
                     text: text,
                     url: url,
-                    images: [],
+                    images: [] as string[],
                     publishedAt: new Date().toISOString()
                   }
                   console.log(`✅ Using recent post: ${text.substring(0, 100)}...`)
@@ -161,14 +161,14 @@ export async function POST(request: NextRequest) {
               console.log('✅ Found data in JSON!')
             }
           } catch (jsonError) {
-            console.log('Failed to parse JSON:', jsonError.message)
+            console.log('Failed to parse JSON:', jsonError instanceof Error ? jsonError.message : String(jsonError))
           }
         }
 
         if (foundData) break
 
       } catch (error) {
-        console.log(`❌ RSS endpoint ${endpoint} failed:`, error.message)
+        console.log(`❌ RSS endpoint ${endpoint} failed:`, error instanceof Error ? error.message : String(error))
         continue
       }
     }
@@ -213,10 +213,10 @@ export async function POST(request: NextRequest) {
     }, { status: 404 })
 
   } catch (error) {
-    console.error('RSS fetch error:', error)
+    console.error('RSS fetch error:', error instanceof Error ? error.message : String(error))
     return NextResponse.json({
       success: false,
-      error: 'RSS fetch failed: ' + error.message
+      error: 'RSS fetch failed: ' + (error instanceof Error ? error.message : String(error))
     }, { status: 500 })
   }
 }

@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
         const rssText = await response.text()
         
         // Parse RSS feed (simplified XML parsing)
-        const items = rssText.match(/<item>(.*?)<\/item>/gs) || []
+        const items = rssText.match(/<item>([\s\S]*?)<\/item>/g) || []
         
         const realPosts = items.slice(0, 10).map((item, index) => {
           const titleMatch = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)
@@ -66,9 +66,9 @@ export async function GET(request: NextRequest) {
             media: [], // RSSHub might not include images, we'll handle this separately
             url: linkMatch ? linkMatch[1] : `https://weibo.com/u/${KELLY_WEIBO_UID}`,
             publishedAt: pubDateMatch ? new Date(pubDateMatch[1]).toISOString() : new Date().toISOString(),
-            likes: Math.floor(Math.random() * 50000) + 1000,
-            comments: Math.floor(Math.random() * 5000) + 100,
-            shares: Math.floor(Math.random() * 1000) + 50
+            likes: 0,
+            comments: 0,
+            shares: 0
           }
         })
         
@@ -83,101 +83,17 @@ export async function GET(request: NextRequest) {
         }
       }
     } catch (rssError) {
-      console.warn('RSSHub fetch failed, falling back to mock data:', rssError)
+      console.warn('RSSHub fetch failed, no mock data available:', rssError)
     }
     
-    // Fallback to mock data if RSSHub fails
-    
-    const mockWeiboData = [
-      {
-        id: '4976543210987654321',
-        text: '今天录制新歌，感谢大家的支持！新专辑很快就要和大家见面了 🎵✨ #新音乐 #Kelly',
-        created_at: 'Wed Apr 10 15:30:00 +0800 2024',
-        pic_urls: [
-          {
-            thumbnail_pic: '/api/placeholder/150/150?text=Kelly+Studio',
-            bmiddle_pic: '/api/placeholder/400/400?text=Kelly+Studio',
-            original_pic: '/api/placeholder/800/800?text=Kelly+Studio'
-          },
-          {
-            thumbnail_pic: '/api/placeholder/150/150?text=Recording',
-            bmiddle_pic: '/api/placeholder/400/400?text=Recording',
-            original_pic: '/api/placeholder/800/800?text=Recording'
-          }
-        ],
-        attitudes_count: 15420,
-        comments_count: 1230,
-        reposts_count: 456,
-        source: 'iPhone客户端'
-      },
-      {
-        id: '4976543210987654322',
-        text: '春天的阳光真好 ☀️ 今天心情特别棒！和大家分享一些美好的瞬间',
-        created_at: 'Tue Apr 09 12:15:00 +0800 2024',
-        pic_urls: [
-          {
-            thumbnail_pic: '/api/placeholder/150/150?text=Kelly+Sunshine',
-            bmiddle_pic: '/api/placeholder/400/400?text=Kelly+Sunshine',
-            original_pic: '/api/placeholder/800/800?text=Kelly+Sunshine'
-          }
-        ],
-        attitudes_count: 8960,
-        comments_count: 567,
-        reposts_count: 234,
-        source: 'iPhone客户端'
-      },
-      {
-        id: '4976543210987654323',
-        text: '昨晚的演出太棒了！感谢所有到场的朋友们，你们的热情让我感动 ❤️ #演唱会 #感谢',
-        created_at: 'Mon Apr 08 23:45:00 +0800 2024',
-        pic_urls: [
-          {
-            thumbnail_pic: '/api/placeholder/150/150?text=Concert+1',
-            bmiddle_pic: '/api/placeholder/400/400?text=Concert+1',
-            original_pic: '/api/placeholder/800/800?text=Concert+1'
-          },
-          {
-            thumbnail_pic: '/api/placeholder/150/150?text=Concert+2',
-            bmiddle_pic: '/api/placeholder/400/400?text=Concert+2',
-            original_pic: '/api/placeholder/800/800?text=Concert+2'
-          },
-          {
-            thumbnail_pic: '/api/placeholder/150/150?text=Concert+3',
-            bmiddle_pic: '/api/placeholder/400/400?text=Concert+3',
-            original_pic: '/api/placeholder/800/800?text=Concert+3'
-          }
-        ],
-        attitudes_count: 25640,
-        comments_count: 2140,
-        reposts_count: 1250,
-        source: 'iPhone客户端'
-      }
-    ]
-
-    // Normalize Weibo data to our common format
-    const normalizedPosts: NormalizedPost[] = mockWeiboData.map(post => ({
-      id: post.id,
-      platform: 'weibo' as const,
-      author: 'Kelly Yu Wenwen',
-      text: post.text,
-      media: post.pic_urls?.map(pic => ({
-        type: 'image' as const,
-        src: `/api/media-proxy?url=${encodeURIComponent(pic.bmiddle_pic)}`,
-        alt: 'Kelly Yu Wenwen post image'
-      })) || [],
-      url: `https://weibo.com/u/${KELLY_WEIBO_UID}?is_search=0&visible=0&weibo_id=${post.id}`,
-      publishedAt: new Date(post.created_at).toISOString(),
-      likes: post.attitudes_count,
-      comments: post.comments_count,
-      shares: post.reposts_count
-    }))
-
+    // No mock data - return empty if RSSHub fails
     return NextResponse.json({
       success: true,
-      data: normalizedPosts,
-      source: 'weibo',
+      data: [],
+      source: 'none',
       profile: `https://weibo.com/u/${KELLY_WEIBO_UID}`,
-      lastUpdated: new Date().toISOString()
+      lastUpdated: new Date().toISOString(),
+      note: 'RSSHub unavailable, no mock data provided'
     })
 
   } catch (error) {

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAuthenticated } from '../../../../lib/auth'
+import { promises as fs } from 'fs'
+import path from 'path'
 
 // Kelly Yu Wenwen's REAL posts database
 // This will store her actual Weibo posts as they're posted
@@ -15,8 +17,6 @@ interface RealKellyPost {
     src: string
     originalSrc?: string
     alt?: string
-    poster?: string // For video thumbnails
-    isIframe?: boolean // For embeddable video players
   }>
   url: string
   publishedAt: string // Exact time from Weibo
@@ -31,12 +31,48 @@ interface RealKellyPost {
   addedAt: string
 }
 
+// File path for persistent storage
+const POSTS_FILE_PATH = path.join(process.cwd(), 'data', 'real-posts.json')
+
 // In-memory storage for REAL posts only (in production, use database)
 // THIS STARTS EMPTY - only real posts from Kelly's Weibo will be added via admin panel
 let realPosts: RealKellyPost[] = []
 
+// Load posts from file on startup
+async function loadPostsFromFile() {
+  try {
+    // Ensure data directory exists
+    const dataDir = path.dirname(POSTS_FILE_PATH)
+    await fs.mkdir(dataDir, { recursive: true })
+    
+    // Try to read existing posts
+    const fileContent = await fs.readFile(POSTS_FILE_PATH, 'utf-8')
+    realPosts = JSON.parse(fileContent)
+    console.log(`📚 Loaded ${realPosts.length} posts from persistent storage`)
+  } catch (error) {
+    console.log('📚 No existing posts file found, starting with empty posts array')
+    realPosts = []
+  }
+}
+
+// Save posts to file
+async function savePostsToFile() {
+  try {
+    await fs.writeFile(POSTS_FILE_PATH, JSON.stringify(realPosts, null, 2))
+    console.log(`💾 Saved ${realPosts.length} posts to persistent storage`)
+  } catch (error) {
+    console.error('❌ Failed to save posts to file:', error)
+  }
+}
+
+// Initialize posts on module load
+loadPostsFromFile()
+
 export async function GET(request: NextRequest) {
   try {
+    // Ensure posts are loaded from file before proceeding
+    await loadPostsFromFile()
+    
     // Sort by published date (newest first)
     const sortedPosts = realPosts
       .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
@@ -47,10 +83,8 @@ export async function GET(request: NextRequest) {
         text: post.text,
         media: post.media.map(m => ({
           type: m.type,
-          src: m.isIframe ? m.src : (m.originalSrc ? `/api/media-proxy?url=${encodeURIComponent(m.originalSrc)}` : m.src),
-          alt: m.alt || 'Kelly Yu Wenwen post media',
-          poster: m.poster, // Include video poster/thumbnail
-          isIframe: m.isIframe // Pass through iframe flag
+          src: m.originalSrc ? `/api/media-proxy?url=${encodeURIComponent(m.originalSrc)}` : m.src,
+          alt: m.alt || 'Kelly Yu Wenwen post media'
         })),
         url: post.url,
         publishedAt: post.publishedAt,
@@ -81,6 +115,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Ensure posts are loaded from file before proceeding
+    await loadPostsFromFile()
+    
     // Check authentication
     const authHeader = request.headers.get('Authorization')
     const user = isAuthenticated(authHeader)
@@ -130,6 +167,9 @@ export async function POST(request: NextRequest) {
       realPosts = realPosts.slice(0, 50)
     }
 
+    // Save to file for persistence
+    await savePostsToFile()
+
     return NextResponse.json({
       success: true,
       message: 'Real post added successfully',
@@ -148,6 +188,9 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    // Ensure posts are loaded from file before proceeding
+    await loadPostsFromFile()
+    
     // Check authentication
     const authHeader = request.headers.get('Authorization')
     const user = isAuthenticated(authHeader)
@@ -159,9 +202,16 @@ export async function PUT(request: NextRequest) {
       }, { status: 401 })
     }
     
-    const { id, engagement } = await request.json()
+    const updatedPost = await request.json()
     
-    const postIndex = realPosts.findIndex(post => post.id === id)
+    if (!updatedPost.id) {
+      return NextResponse.json({
+        success: false,
+        error: 'Post ID is required'
+      }, { status: 400 })
+    }
+    
+    const postIndex = realPosts.findIndex(post => post.id === updatedPost.id)
     if (postIndex === -1) {
       return NextResponse.json({
         success: false,
@@ -169,16 +219,29 @@ export async function PUT(request: NextRequest) {
       }, { status: 404 })
     }
 
-    // Update engagement numbers
-    realPosts[postIndex].engagement = {
-      ...realPosts[postIndex].engagement,
-      ...engagement,
-      lastUpdated: new Date().toISOString()
+    // Update the entire post while preserving some original fields
+    const originalPost = realPosts[postIndex]
+    realPosts[postIndex] = {
+      ...updatedPost,
+      // Preserve original metadata
+      id: originalPost.id,
+      weiboId: originalPost.weiboId,
+      verified: originalPost.verified,
+      source: originalPost.source,
+      addedAt: originalPost.addedAt,
+      // Update engagement with timestamp
+      engagement: {
+        ...updatedPost.engagement,
+        lastUpdated: new Date().toISOString()
+      }
     }
+
+    // Save to file for persistence
+    await savePostsToFile()
 
     return NextResponse.json({
       success: true,
-      message: 'Post engagement updated',
+      message: 'Post updated successfully',
       post: realPosts[postIndex]
     })
 
@@ -193,6 +256,9 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    // Ensure posts are loaded from file before proceeding
+    await loadPostsFromFile()
+    
     // Check authentication
     const authHeader = request.headers.get('Authorization')
     const user = isAuthenticated(authHeader)
@@ -206,13 +272,6 @@ export async function DELETE(request: NextRequest) {
     
     const { id } = await request.json()
     
-    if (!id) {
-      return NextResponse.json({
-        success: false,
-        error: 'Post ID is required'
-      }, { status: 400 })
-    }
-    
     const postIndex = realPosts.findIndex(post => post.id === id)
     if (postIndex === -1) {
       return NextResponse.json({
@@ -221,14 +280,17 @@ export async function DELETE(request: NextRequest) {
       }, { status: 404 })
     }
 
-    // Remove the post from array
-    const deletedPost = realPosts.splice(postIndex, 1)[0]
+    // Remove the post
+    const removedPost = realPosts.splice(postIndex, 1)[0]
+
+    // Save to file for persistence
+    await savePostsToFile()
 
     return NextResponse.json({
       success: true,
       message: 'Post deleted successfully',
-      deletedPost: deletedPost,
-      remainingCount: realPosts.length
+      deletedPost: removedPost,
+      total: realPosts.length
     })
 
   } catch (error) {

@@ -60,8 +60,8 @@ export default function HomePage() {
         const realResponse = await fetch('/api/posts/real')
         const realData = await realResponse.json()
         
-        let allPosts = []
-        let primarySource = 'mock'
+        let allPosts: any[] = []
+        let primarySource = 'none'
         
         if (realData.success && realData.data.length > 0) {
           // Use real posts as primary source
@@ -103,9 +103,9 @@ export default function HomePage() {
         setFilteredPosts(allPosts)
       } catch (error) {
         console.error('Error fetching posts:', error)
-        // Fallback to mock data
-        setPosts(mockPosts)
-        setFilteredPosts(mockPosts)
+        // Fallback to empty posts since no mock data is available
+        setPosts([])
+        setFilteredPosts([])
       } finally {
         setLoading(false)
       }
@@ -132,7 +132,7 @@ export default function HomePage() {
       })
       const realData = await realResponse.json()
       
-      let allPosts = []
+      let allPosts: any[] = []
       
       if (realData.success && realData.data.length > 0) {
         allPosts = [...realData.data]
@@ -204,13 +204,13 @@ export default function HomePage() {
                   <span className={`px-2 py-1 rounded text-xs ${
                     dataSource === 'real_verified' ? 'bg-green-100 text-green-700 font-bold' :
                     dataSource === 'rsshub_live' ? 'bg-blue-100 text-blue-700' :
-                    dataSource === 'curated_fallback' ? 'bg-yellow-100 text-yellow-700' :
+                    dataSource === 'live_rss' ? 'bg-yellow-100 text-yellow-700' :
                     dataSource === 'empty' ? 'bg-red-100 text-red-600' :
                     'bg-blue-100 text-blue-700'
                   }`}>
                     {dataSource === 'real_verified' ? '✅ REAL POSTS' :
                      dataSource === 'rsshub_live' ? '🔴 LIVE RSS' :
-                     dataSource === 'curated_fallback' ? '📋 CURATED' :
+                     dataSource === 'live_rss' ? '📡 LIVE RSS' :
                      dataSource === 'empty' ? '⚠️ NO POSTS' :
                      '📡 LIVE'}
                   </span>

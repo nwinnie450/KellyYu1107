@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
         if (foundContent) break // Found content, no need to try other URLs
 
       } catch (error) {
-        console.log(`❌ Failed to load ${testUrl}:`, error.message)
+        console.log(`❌ Failed to load ${testUrl}:`, error instanceof Error ? error.message : String(error))
         continue
       }
     }
@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('Browser automation error:', error)
+    console.error('Browser automation error:', error instanceof Error ? error.message : String(error))
     
     if (browser) {
       await browser.close()
@@ -212,7 +212,7 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json({
       success: false,
-      error: 'Browser automation failed: ' + error.message
+      error: 'Browser automation failed: ' + (error instanceof Error ? error.message : String(error))
     }, { status: 500 })
   }
 }

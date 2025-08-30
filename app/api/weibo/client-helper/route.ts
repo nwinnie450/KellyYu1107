@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
     console.error('Client helper error:', error)
     return NextResponse.json({
       success: false,
-      error: 'Client helper failed: ' + error.message
+      error: 'Client helper failed: ' + (error instanceof Error ? error.message : String(error))
     }, { status: 500 })
   }
 }
