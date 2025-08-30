@@ -16,6 +16,7 @@ interface RealKellyPost {
     originalSrc?: string
     alt?: string
     poster?: string // For video thumbnails
+    isIframe?: boolean // For embeddable video players
   }>
   url: string
   publishedAt: string // Exact time from Weibo
@@ -46,9 +47,10 @@ export async function GET(request: NextRequest) {
         text: post.text,
         media: post.media.map(m => ({
           type: m.type,
-          src: m.originalSrc ? `/api/media-proxy?url=${encodeURIComponent(m.originalSrc)}` : m.src,
+          src: m.isIframe ? m.src : (m.originalSrc ? `/api/media-proxy?url=${encodeURIComponent(m.originalSrc)}` : m.src),
           alt: m.alt || 'Kelly Yu Wenwen post media',
-          poster: m.poster // Include video poster/thumbnail
+          poster: m.poster, // Include video poster/thumbnail
+          isIframe: m.isIframe // Pass through iframe flag
         })),
         url: post.url,
         publishedAt: post.publishedAt,

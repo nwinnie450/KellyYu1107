@@ -161,7 +161,20 @@ export default function FeedCard({ post, onMediaClick }: FeedCardProps) {
                     />
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 rounded-lg" />
                   </div>
+                ) : post.media[0].isIframe ? (
+                  // Iframe video (Weibo H5 player)
+                  <div className="relative">
+                    <iframe
+                      src={post.media[0].src}
+                      className="w-full h-80 rounded-lg"
+                      allow="autoplay; encrypted-media; picture-in-picture"
+                      allowFullScreen
+                      referrerPolicy="no-referrer-when-downgrade"
+                      style={{ border: 'none' }}
+                    />
+                  </div>
                 ) : (
+                  // Regular video file
                   <div className="relative">
                     <video
                       src={post.media[0].src}
@@ -215,7 +228,28 @@ export default function FeedCard({ post, onMediaClick }: FeedCardProps) {
                           </div>
                         )}
                       </div>
+                    ) : media.isIframe ? (
+                      // Iframe video thumbnail (click to view in lightbox)
+                      <div className="relative">
+                        {media.poster ? (
+                          <img
+                            src={media.poster}
+                            alt={`${post.author} video ${index + 1}`}
+                            className="w-full h-32 sm:h-40 object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        ) : (
+                          <div className="w-full h-32 sm:h-40 bg-gray-900 flex items-center justify-center">
+                            <Play size={24} className="text-white" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors duration-300">
+                          <div className="bg-white/90 rounded-full p-2 group-hover:scale-110 transition-transform duration-300">
+                            <Play size={16} className="text-gray-800 ml-0.5" />
+                          </div>
+                        </div>
+                      </div>
                     ) : (
+                      // Regular video file
                       <div className="relative">
                         <video
                           src={media.src}

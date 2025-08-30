@@ -210,15 +210,44 @@ function extractPostFromData(data: any, originalUrl: string) {
     }
   }
 
-  // Enhanced video detection (multiple sources)
+  // Enhanced video detection (multiple sources) - prioritize H5 player
   if (data.page_info && data.page_info.type === 'video') {
     const videoInfo = data.page_info.media_info || {}
-    media.push({
-      type: 'video' as const,
-      src: videoInfo.mp4_720p_mp4 || videoInfo.mp4_sd_url || videoInfo.stream_url || videoInfo.mp4_url,
-      originalSrc: videoInfo.mp4_hd_url || videoInfo.mp4_720p_mp4 || videoInfo.stream_url_hd,
-      poster: data.page_info.pic || videoInfo.cover_image || videoInfo.kol_title
-    })
+    
+    // Prefer H5 player URL (embeddable iframe)
+    if (videoInfo.h5_url) {
+      console.log('🎥 Found H5 player URL:', videoInfo.h5_url)
+      media.push({
+        type: 'video' as const,
+        src: videoInfo.h5_url,
+        originalSrc: videoInfo.h5_url,
+        poster: data.page_info.pic || videoInfo.cover_image,
+        isIframe: true
+      })
+    }
+    // Fallback to object_id based iframe
+    else if (data.page_info.object_id) {
+      const h5PlayerUrl = `https://m.weibo.cn/s/video/show?object_id=${encodeURIComponent(data.page_info.object_id)}`
+      console.log('🎥 Creating H5 player from object_id:', h5PlayerUrl)
+      media.push({
+        type: 'video' as const,
+        src: h5PlayerUrl,
+        originalSrc: h5PlayerUrl,
+        poster: data.page_info.pic || videoInfo.cover_image,
+        isIframe: true
+      })
+    }
+    // Last resort - try direct URLs (likely to be blocked)
+    else {
+      console.log('⚠️ No H5 URL found, using direct video URLs (may not work)')
+      media.push({
+        type: 'video' as const,
+        src: videoInfo.mp4_720p_mp4 || videoInfo.mp4_sd_url || videoInfo.stream_url || videoInfo.mp4_url,
+        originalSrc: videoInfo.mp4_hd_url || videoInfo.mp4_720p_mp4 || videoInfo.stream_url_hd,
+        poster: data.page_info.pic || videoInfo.cover_image || videoInfo.kol_title,
+        isIframe: false
+      })
+    }
     console.log('🎥 Found video:', videoInfo)
   }
   
@@ -233,14 +262,21 @@ function extractPostFromData(data: any, originalUrl: string) {
         console.log('🔍 url_object.object keys:', Object.keys(urlObj.object))
         if (urlObj.object.object_type === 'video' || urlObj.object.scheme?.includes('video')) {
           console.log('🎥 Found video in object structure!')
-          // Try to extract video data from this structure
-          const videoData = urlObj.object
-          media.push({
-            type: 'video' as const,
-            src: videoData.stream_url || videoData.mp4_url || videoData.video_url || videoData.media_url,
-            originalSrc: videoData.hd_url || videoData.stream_url || videoData.mp4_url,
-            poster: videoData.pic || videoData.cover_url || videoData.thumbnail
-          })
+          console.log('🔍 object_id:', urlObj.object_id)
+          
+          // Use Weibo's embeddable H5 player instead of direct MP4 URLs
+          if (urlObj.object_id) {
+            const h5PlayerUrl = `https://m.weibo.cn/s/video/show?object_id=${encodeURIComponent(urlObj.object_id)}`
+            console.log('🎥 Creating H5 player iframe URL:', h5PlayerUrl)
+            
+            media.push({
+              type: 'video' as const,
+              src: h5PlayerUrl,
+              originalSrc: h5PlayerUrl,
+              poster: data.pic || data.thumbnail_pic,
+              isIframe: true // Flag to indicate this should be rendered as iframe
+            })
+          }
         }
       }
       if (urlObj.page_info) {

@@ -9,6 +9,7 @@ interface MediaItem {
   src: string
   alt?: string
   poster?: string
+  isIframe?: boolean
 }
 
 interface MediaLightboxProps {
@@ -206,6 +207,24 @@ export default function MediaLightbox({
                   }}
                   className="object-contain transition-transform duration-200 cursor-zoom-in"
                   onClick={handleZoomIn}
+                />
+              ) : currentMedia.isIframe ? (
+                <motion.iframe
+                  key={`iframe-${currentIndex}`}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  src={currentMedia.src}
+                  allow="autoplay; encrypted-media; picture-in-picture"
+                  allowFullScreen
+                  referrerPolicy="no-referrer-when-downgrade"
+                  style={{
+                    transform: `scale(${scale})`,
+                    width: showOriginalSize ? '100vw' : '90vw',
+                    height: showOriginalSize ? '100vh' : '80vh',
+                    border: 'none',
+                    borderRadius: '8px'
+                  }}
+                  className="transition-transform duration-200"
                 />
               ) : (
                 <motion.video
