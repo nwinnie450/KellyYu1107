@@ -70,6 +70,10 @@ export async function POST(request: NextRequest) {
             console.log('🔍 Direct post data keys:', Object.keys(data.data))
             console.log('🔍 mblogtype:', data.data.mblogtype)
             console.log('🔍 pic_ids:', data.data.pic_ids)
+            console.log('🔍 pic_num:', data.data.pic_num)
+            console.log('🔍 thumbnail_pic:', !!data.data.thumbnail_pic)
+            console.log('🔍 original_pic:', !!data.data.original_pic)
+            console.log('🔍 pic_urls:', data.data.pic_urls?.length || 'none')
             console.log('🔍 url_objects:', data.data.url_objects?.length || 'none')
             if (data.data.page_info) {
               console.log('🔍 page_info type:', data.data.page_info.type)
@@ -171,8 +175,22 @@ function extractPostFromData(data: any, originalUrl: string) {
   // Extract media (images/videos)
   const media: any[] = []
   
-  // Pictures - but check if any are actually videos/GIFs
+  // Extract images from multiple possible data structures
+  
+  // Method 1: Direct image fields (common in newer posts)
+  if (data.thumbnail_pic || data.bmiddle_pic || data.original_pic) {
+    console.log('🖼️ Found direct image fields')
+    media.push({
+      type: 'image' as const,
+      src: data.thumbnail_pic || data.bmiddle_pic,
+      originalSrc: data.original_pic || data.bmiddle_pic || data.thumbnail_pic,
+      alt: 'Kelly Yu Wenwen post image'
+    })
+  }
+  
+  // Method 2: pic_urls array (traditional method)
   if (data.pic_urls && Array.isArray(data.pic_urls)) {
+    console.log(`🖼️ Found ${data.pic_urls.length} images in pic_urls`)
     for (const pic of data.pic_urls) {
       // Check if this is actually a video or GIF
       const isVideo = pic.url?.includes('.mp4') || pic.url?.includes('.mov') || 
@@ -195,6 +213,21 @@ function extractPostFromData(data: any, originalUrl: string) {
           alt: 'Kelly Yu Wenwen post image'
         })
       }
+    }
+  }
+  
+  // Method 3: Generate image URLs from pic_ids (if pic_urls missing)
+  if ((!data.pic_urls || data.pic_urls.length === 0) && data.pic_ids && Array.isArray(data.pic_ids) && data.pic_ids.length > 0) {
+    console.log(`🖼️ Generating image URLs from ${data.pic_ids.length} pic_ids`)
+    for (const picId of data.pic_ids) {
+      // Weibo image URL pattern: https://wx{1-4}.sinaimg.cn/{size}/{pic_id}.jpg
+      const baseUrl = 'https://wx1.sinaimg.cn'
+      media.push({
+        type: 'image' as const,
+        src: `${baseUrl}/mw690/${picId}.jpg`, // Medium size for display
+        originalSrc: `${baseUrl}/large/${picId}.jpg`, // Large size for original
+        alt: 'Kelly Yu Wenwen post image'
+      })
     }
   }
   
