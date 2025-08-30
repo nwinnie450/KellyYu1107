@@ -69,8 +69,8 @@ export async function POST(request: NextRequest) {
           timeout: 15000 
         })
 
-        // Wait for content to load
-        await page.waitForTimeout(3000)
+        // Wait for content to load (using Promise.resolve for compatibility)
+        await new Promise(resolve => setTimeout(resolve, 3000))
 
         // Try to extract post text
         const textSelectors = [

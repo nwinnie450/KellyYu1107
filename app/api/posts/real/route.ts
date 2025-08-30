@@ -15,6 +15,7 @@ interface RealKellyPost {
     src: string
     originalSrc?: string
     alt?: string
+    poster?: string // For video thumbnails
   }>
   url: string
   publishedAt: string // Exact time from Weibo
@@ -46,7 +47,8 @@ export async function GET(request: NextRequest) {
         media: post.media.map(m => ({
           type: m.type,
           src: m.originalSrc ? `/api/media-proxy?url=${encodeURIComponent(m.originalSrc)}` : m.src,
-          alt: m.alt || 'Kelly Yu Wenwen post media'
+          alt: m.alt || 'Kelly Yu Wenwen post media',
+          poster: m.poster // Include video poster/thumbnail
         })),
         url: post.url,
         publishedAt: post.publishedAt,

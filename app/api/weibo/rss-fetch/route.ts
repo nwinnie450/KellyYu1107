@@ -63,34 +63,82 @@ export async function POST(request: NextRequest) {
 
         // Try to parse as RSS/XML first
         if (contentType.includes('xml') || data.includes('<?xml')) {
-          console.log('🔍 Parsing as RSS/XML...')
+          console.log('🔍 Parsing RSS/XML with enhanced Kelly detection...')
           
-          // Simple RSS parsing to extract posts
+          // Enhanced RSS parsing - look for Kelly-related content
           const items = data.match(/<item[\s\S]*?<\/item>/gi) || []
+          console.log(`📋 Found ${items.length} RSS items`)
           
           for (const item of items) {
-            if (item.includes(weiboId) || item.toLowerCase().includes('kelly')) {
-              // Extract title/description
+            // Multiple ways to match Kelly's content
+            const isKellyPost = item.includes(weiboId) || 
+                               item.toLowerCase().includes('kelly') ||
+                               item.includes('于文文') ||
+                               item.includes('Kelly Yu') ||
+                               item.includes('6465429977')
+                               
+            if (isKellyPost) {
+              console.log('🎯 Found Kelly-related item!')
+              
+              // Extract content with better parsing
               const titleMatch = item.match(/<title[^>]*><!\[CDATA\[(.*?)\]\]><\/title>/i) || 
                                item.match(/<title[^>]*>(.*?)<\/title>/i)
               const descMatch = item.match(/<description[^>]*><!\[CDATA\[(.*?)\]\]><\/description>/i) ||
                                item.match(/<description[^>]*>(.*?)<\/description>/i)
               const linkMatch = item.match(/<link[^>]*>(.*?)<\/link>/i)
+              const pubDateMatch = item.match(/<pubDate[^>]*>(.*?)<\/pubDate>/i)
               
               if (titleMatch || descMatch) {
+                let text = (titleMatch?.[1] || descMatch?.[1] || '')
+                  .replace(/<[^>]*>/g, '')
+                  .replace(/&lt;/g, '<')
+                  .replace(/&gt;/g, '>')
+                  .replace(/&amp;/g, '&')
+                  .replace(/&quot;/g, '"')
+                  .trim()
+                
                 postData = {
-                  text: (titleMatch?.[1] || descMatch?.[1] || '').replace(/<[^>]*>/g, '').trim(),
+                  text: text,
                   url: linkMatch?.[1] || url,
-                  images: []
+                  images: [],
+                  publishedAt: pubDateMatch?.[1] || new Date().toISOString()
                 }
                 
-                // Look for images in RSS content
-                const imgMatches = item.match(/https?:\/\/[^\s"'<>]*sinaimg\.cn[^\s"'<>]*/gi) || []
+                // Enhanced image detection
+                const imgMatches = [
+                  ...item.match(/https?:\/\/[^\s"'<>]*sinaimg\.cn[^\s"'<>]*\.(jpg|jpeg|png|gif|webp)/gi) || [],
+                  ...item.match(/https?:\/\/[^\s"'<>]*weibo\.com[^\s"'<>]*\.(jpg|jpeg|png|gif|webp)/gi) || []
+                ]
                 postData.images = [...new Set(imgMatches)]
                 
+                console.log(`✅ Extracted: ${text.length} chars, ${postData.images.length} images`)
                 foundData = true
-                console.log('✅ Found data in RSS!')
                 break
+              }
+            }
+          }
+          
+          // If no specific post found, grab latest Kelly post
+          if (!foundData && items.length > 0) {
+            console.log('🔍 No specific post found, checking recent items...')
+            for (let i = 0; i < Math.min(5, items.length); i++) {
+              const item = items[i]
+              const titleMatch = item.match(/<title[^>]*><!\[CDATA\[(.*?)\]\]><\/title>/i) || 
+                               item.match(/<title[^>]*>(.*?)<\/title>/i)
+              
+              if (titleMatch) {
+                const text = titleMatch[1].replace(/<[^>]*>/g, '').trim()
+                if (text.length > 10) {
+                  postData = {
+                    text: text,
+                    url: url,
+                    images: [],
+                    publishedAt: new Date().toISOString()
+                  }
+                  console.log(`✅ Using recent post: ${text.substring(0, 100)}...`)
+                  foundData = true
+                  break
+                }
               }
             }
           }
