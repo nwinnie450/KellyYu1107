@@ -45,6 +45,7 @@ export default function RealPostsAdmin() {
     verified: true,
     media: []
   })
+  const [videoOverride, setVideoOverride] = useState(false)
 
   // Check authentication on mount
   useEffect(() => {
@@ -79,7 +80,9 @@ export default function RealPostsAdmin() {
 
   const handleAddRealPost = async () => {
     if (!newPost.text?.trim() || !newPost.publishedAt || !newPost.url) {
-      alert('Please fill in: Post Text, Published Time, and Weibo URL')
+      const platformName = newPost.platform === 'douyin' ? 'Douyin Share Text' : 
+                          newPost.platform === 'red' ? 'RedNotes Share Text' : 'Weibo URL'
+      alert(`Please fill in: Post Text, Published Time, and ${platformName}`)
       return
     }
 
@@ -131,6 +134,158 @@ export default function RealPostsAdmin() {
   const extractWeiboId = (url: string): string => {
     const match = url.match(/weibo\.com\/\d+\/([A-Za-z0-9]+)/)
     return match ? match[1] : ''
+  }
+
+  const handleDouyinFetch = async () => {
+    if (!newPost.url?.trim()) return
+    
+    setLoading(true)
+    
+    try {
+      console.log('🎵 Processing Douyin share text/URL...')
+      
+      const response = await fetch('/api/ingest/douyin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          shareText: newPost.url // Always use the textarea content as shareText
+        })
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        console.log('✅ Douyin parsing succeeded!')
+        
+        // Update form with parsed and scraped data
+        setNewPost(prev => ({
+          ...prev,
+          platform: 'douyin',
+          text: data.scrapedText || data.originalText || data.text || prev.text,
+          originalText: data.scrapedText || data.originalText || prev.originalText,
+          url: data.source_url || prev.url,
+          publishedAt: prev.publishedAt, // Don't auto-set date from share text - needs manual input
+          engagement: data.scrapedEngagement || prev.engagement || { likes: 0, comments: 0, shares: 0 },
+          media: data.videoMedia ? [data.videoMedia] : [{
+            type: 'video' as const,
+            src: data.source_url || data.redirectUrl,
+            originalSrc: data.source_url || data.redirectUrl,
+            isIframe: false,
+            alt: 'Kelly Yu Wenwen Douyin video'
+          }]
+        }))
+        
+        const scrapingStatus = data.scrapingMethod === 'success' ? '✅ Full content scraped!' : '⚠️ Using share text only'
+        const engagementStatus = data.scrapedEngagement ? '✅ Auto-filled from scraping' : '⚪ Please set manually'
+        
+        alert(`🎵 Douyin Content Processed!\n\n` +
+              `🔄 Content Scraping: ${scrapingStatus}\n` +
+              `📝 Text: ${data.scrapedText ? 'Full content extracted' : 'Share text only'}\n` +
+              `🏷️ Hashtags: ${data.hashtags?.join(', ') || 'None found'}\n` +
+              `📅 Date: ${data.publishDate || 'Please set manually'}\n` +
+              `📊 Engagement: ${engagementStatus}\n` +
+              `🎥 Video: ${data.hasVideo ? 'Found' : 'Not found'}\n\n` +
+              `Ready to publish! 🚀`)
+      } else {
+        alert(`❌ ${data.error || 'Failed to process Douyin content'}`)
+      }
+      
+    } catch (error) {
+      console.error('Douyin fetch error:', error)
+      alert('❌ Error processing Douyin content')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRedNotesFetch = async () => {
+    if (!newPost.url?.trim()) return
+    
+    setLoading(true)
+    
+    try {
+      console.log('🌹 Processing RedNotes share text/URL...')
+      
+      const response = await fetch('/api/ingest/rednotes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          shareText: newPost.url // Always use the textarea content as shareText
+        })
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        console.log('✅ RedNotes parsing succeeded!')
+        console.log('🔍 Admin Debug - Received data:', {
+          hasVideo: data.hasVideo,
+          mediaType: data.mediaType,
+          videoOverride: videoOverride,
+          mediaObjects: data.mediaObjects
+        })
+        
+        // Use better text content - prefer parsed info over scraped
+        const finalText = data.originalText || data.text || `Kelly于文文最新小红书分享`;
+        const isVideo = data.hasVideo || videoOverride;
+        
+        // Update form with parsed and scraped data
+        setNewPost(prev => ({
+          ...prev,
+          platform: 'red',
+          text: finalText,
+          originalText: finalText,
+          url: data.source_url || prev.url,
+          publishedAt: prev.publishedAt, // Don't auto-set date from share text - needs manual input
+          engagement: data.scrapedEngagement || prev.engagement || { likes: 0, comments: 0, shares: 0 },
+          media: [{
+            type: (isVideo ? 'video' : 'image') as const,
+            src: data.mediaThumb || data.source_url || '',
+            originalSrc: data.mediaThumb || data.source_url || '',
+            isIframe: false,
+            alt: `Kelly Yu Wenwen RedNotes ${isVideo ? 'video' : 'post'}`,
+            poster: isVideo ? data.mediaThumb || '' : undefined
+          }]
+        }))
+        
+        console.log('🔍 Final post object being saved:', {
+          platform: 'red',
+          hasVideoDetected: data.hasVideo,
+          videoOverrideUsed: videoOverride,
+          finalMediaType: data.hasVideo || videoOverride ? 'video' : 'image',
+          mediaObjects: data.mediaObjects || [{type: (data.hasVideo || videoOverride ? 'video' : 'image')}]
+        })
+        
+        const scrapingStatus = data.scrapingMethod === 'success' ? '✅ Full content scraped' : '⚠️ Share text only'
+        const engagementStatus = data.scrapedEngagement ? 
+          `❤️ ${data.scrapedEngagement.likes} 💬 ${data.scrapedEngagement.comments}` : 
+          'Will be set to 0'
+        
+        const finalVideoStatus = data.hasVideo || videoOverride;
+        const videoStatusText = data.hasVideo ? '✅ Auto-detected' : 
+                               videoOverride ? '✅ Manual override' : 
+                               '❌ No video detected';
+        
+        alert(`🌹 RedNotes Content Processed!\n\n` +
+              `🔄 Content Scraping: ${scrapingStatus}\n` +
+              `📝 Text: ${data.scrapedText ? 'Full content extracted' : 'Share text only'}\n` +
+              `👤 Author: ${data.author || 'Not found'}\n` +
+              `📅 Date: ${data.publishDate || 'Please set manually (RedNotes share text has no date)'}\n` +
+              `📊 Engagement: ${engagementStatus}\n` +
+              `🎬 Media Type: ${finalVideoStatus ? 'video' : 'image'}\n` +
+              `🎥 Video: ${videoStatusText}\n` +
+              `🖼️ Images: ${!finalVideoStatus ? 'Available' : 'Thumbnail only'}\n\n` +
+              `${finalVideoStatus ? '🎬 Video post ready!' : '🖼️ Image post ready!'} Set date manually and publish! 🚀`)
+      } else {
+        alert(`❌ ${data.error || 'Failed to process RedNotes content'}`)
+      }
+      
+    } catch (error) {
+      console.error('RedNotes fetch error:', error)
+      alert('❌ Error processing RedNotes content')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleAutoFetch = async () => {
@@ -471,38 +626,164 @@ export default function RealPostsAdmin() {
               </select>
             </div>
 
-            {/* Weibo URL with Auto-Fetch */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                📱 Weibo Post URL (Required)
-              </label>
-              <div className="flex space-x-2">
-                <input
-                  type="url"
-                  value={newPost.url || ''}
-                  onChange={(e) => setNewPost(prev => ({ ...prev, url: e.target.value }))}
-                  placeholder="https://weibo.com/6465429977/O12345678901234567890"
-                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
-                />
-                <button
-                  type="button"
-                  onClick={handleAutoFetch}
-                  disabled={!newPost.url || loading}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
-                >
-                  <span>🔄</span>
-                  <span className="hidden sm:inline">Auto-Fetch</span>
-                </button>
+            {/* Platform-specific URL input */}
+            {newPost.platform === 'douyin' ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  🎵 Douyin Share Text / URL (Required)
+                </label>
+                <div className="flex space-x-2">
+                  <textarea
+                    value={newPost.url || ''}
+                    onChange={(e) => setNewPost(prev => ({ ...prev, url: e.target.value }))}
+                    placeholder="9.99 复制打开抖音，看看【Kelly于文文的作品】根本停不下来怎么回事 # 李羲承进行曲# https://v.douyin.com/GjQ0V39et9c/"
+                    rows={3}
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleDouyinFetch}
+                    disabled={!newPost.url || loading}
+                    className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
+                  >
+                    <span>🎵</span>
+                    <span className="hidden sm:inline">Parse</span>
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  ⚠️ <strong>Paste the full share text from Douyin app</strong> - includes title, hashtags, and URL
+                </p>
+                <div className="text-xs text-pink-600 mt-1 space-y-1">
+                  <p><strong>✅ Full Text:</strong> 9.99 复制打开抖音，看看【Kelly于文文的作品】...</p>
+                  <p><strong>✅ Just URL:</strong> https://v.douyin.com/GjQ0V39et9c/</p>
+                  <p><strong>💡 Note:</strong> Douyin share text is auto-truncated (limited by Douyin)</p>
+                  <p><strong>🚀 Parse:</strong> Click to extract and clean the content</p>
+                </div>
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                ⚠️ <strong>Must be the EXACT post URL</strong> (not profile URL) - click on timestamp on Weibo to get specific post URL
-              </p>
-              <div className="text-xs text-blue-600 mt-1 space-y-1">
-                <p><strong>✅ Correct:</strong> https://weibo.com/6465429977/O5100987654321098765</p>
-                <p><strong>❌ Wrong:</strong> https://weibo.com/u/6465429977</p>
-                <p><strong>🚀 Auto-Fetch:</strong> Click button to validate URL and pre-fill post ID</p>
+            ) : newPost.platform === 'red' ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  🌹 RedNotes Share Text / URL (Required)
+                </label>
+                <div className="flex space-x-2">
+                  <textarea
+                    value={newPost.url || ''}
+                    onChange={(e) => setNewPost(prev => ({ ...prev, url: e.target.value }))}
+                    placeholder="77 Kelly于文文发布了一篇小红书笔记，快来看吧！ 😆 6B6ZRuGXCH8 🌼 http://xhslink.com/n/599W1aV2kpR 复制本条信息，打开【小红书】App查看精彩内容！"
+                    rows={3}
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRedNotesFetch}
+                    disabled={!newPost.url || loading}
+                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
+                  >
+                    <span>🌹</span>
+                    <span className="hidden sm:inline">Parse</span>
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  ⚠️ <strong>Paste the full share text from RedNotes app</strong> - includes author, note ID, and URL
+                </p>
+                <div className="text-xs text-red-600 mt-1 space-y-1">
+                  <p><strong>✅ Full Text:</strong> 77 Kelly于文文发布了一篇小红书笔记，快来看吧！ 😆 6B6ZRuGXCH8...</p>
+                  <p><strong>✅ Just URL:</strong> http://xhslink.com/n/599W1aV2kpR</p>
+                  <p><strong>💡 Note:</strong> RedNotes has strict anti-scraping measures</p>
+                  <p><strong>🚀 Parse:</strong> Click to extract author, content, and media info</p>
+                </div>
+                
+                {/* Manual video override for RedNotes */}
+                <div className="mt-3 p-3 bg-red-50 rounded-lg border border-red-200">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={videoOverride}
+                      onChange={(e) => setVideoOverride(e.target.checked)}
+                      className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                    />
+                    <span className="text-sm font-medium text-red-800">
+                      🎥 Force Video Type (if auto-detection fails)
+                    </span>
+                  </label>
+                  <p className="text-xs text-red-600 mt-1 ml-6">
+                    Check this if the content is actually a video but wasn't detected automatically
+                  </p>
+                </div>
+                
+                {/* Manual content override for RedNotes */}
+                <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <label className="block text-sm font-medium text-blue-800 mb-2">
+                    📝 Custom Content Text (Optional)
+                  </label>
+                  <textarea
+                    value={newPost.text || ''}
+                    onChange={(e) => setNewPost(prev => ({ ...prev, text: e.target.value, originalText: e.target.value }))}
+                    placeholder="Enter the actual content you want to display..."
+                    rows={3}
+                    className="w-full border border-blue-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
+                  />
+                  <p className="text-xs text-blue-600 mt-1">
+                    💡 RedNotes share text doesn't contain actual post content. Enter what you want to display here.
+                  </p>
+                </div>
+                
+                {/* Manual date override for RedNotes */}
+                <div className="mt-3 p-3 bg-green-50 rounded-lg border border-green-200">
+                  <label className="block text-sm font-medium text-green-800 mb-2">
+                    📅 Quick Date Set (for this specific post)
+                  </label>
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Set to March 13, 2025, 15:07
+                        const date = new Date('2025-03-13T15:07:00');
+                        setNewPost(prev => ({ ...prev, publishedAt: date.toISOString() }));
+                      }}
+                      className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                    >
+                      📅 Set to March 13, 2025 15:07
+                    </button>
+                  </div>
+                  <p className="text-xs text-green-600 mt-1">
+                    Quick button to set the correct date for this specific RedNotes post
+                  </p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  📱 Weibo Post URL (Required)
+                </label>
+                <div className="flex space-x-2">
+                  <input
+                    type="url"
+                    value={newPost.url || ''}
+                    onChange={(e) => setNewPost(prev => ({ ...prev, url: e.target.value }))}
+                    placeholder="https://weibo.com/6465429977/O12345678901234567890"
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAutoFetch}
+                    disabled={!newPost.url || loading}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
+                  >
+                    <span>🔄</span>
+                    <span className="hidden sm:inline">Auto-Fetch</span>
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  ⚠️ <strong>Must be the EXACT post URL</strong> (not profile URL) - click on timestamp on Weibo to get specific post URL
+                </p>
+                <div className="text-xs text-blue-600 mt-1 space-y-1">
+                  <p><strong>✅ Correct:</strong> https://weibo.com/6465429977/O5100987654321098765</p>
+                  <p><strong>❌ Wrong:</strong> https://weibo.com/u/6465429977</p>
+                  <p><strong>🚀 Auto-Fetch:</strong> Click button to validate URL and pre-fill post ID</p>
+                </div>
+              </div>
+            )}
 
             {/* Published Date & Time */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -550,7 +831,7 @@ export default function RealPostsAdmin() {
               </div>
             </div>
             <div className="text-xs text-blue-600">
-              <p><strong>💡 Tip:</strong> Check the post timestamp on Weibo for exact time</p>
+              <p><strong>💡 Tip:</strong> Check the post timestamp on {newPost.platform === 'douyin' ? 'Douyin' : newPost.platform === 'red' ? 'RedNotes' : 'Weibo'} for exact time</p>
               <p>Current: {newPost.publishedAt ? 
                 new Date(newPost.publishedAt).toLocaleString('zh-CN', {
                   year: 'numeric',

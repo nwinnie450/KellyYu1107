@@ -83,6 +83,23 @@ const nextConfig = {
           },
         ],
       },
+      {
+        source: "/(.*)",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'self'",
+              "img-src 'self' data: https: blob:",
+              "media-src 'self' https: blob:",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
+              "style-src 'self' 'unsafe-inline' https:",
+              "connect-src 'self' https: data:",
+              "frame-src https://m.weibo.cn https://*.weibo.cn https://weibo.com https://*.weibo.com",
+            ].join("; "),
+          },
+        ],
+      },
     ]
   },
   // Enable experimental features for better performance

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Weibo Video Embed Test</title>
+    <style>
+        .test-container { margin: 20px 0; border: 1px solid #ccc; }
+        .test-title { background: #f0f0f0; padding: 10px; font-weight: bold; }
+        iframe { width: 500px; height: 300px; border: 1px solid #999; }
+    </style>
+</head>
+<body>
+    <h1>Weibo Video Embed Test</h1>
+    
+    <div class="test-container">
+        <div class="test-title">1. TV Show Format</div>
+        <iframe src="https://weibo.com/tv/show/1034:5205158733480074" 
+                allow="autoplay; encrypted-media; picture-in-picture" 
+                allowfullscreen
+                referrerpolicy="no-referrer-when-downgrade"></iframe>
+    </div>
+    
+    <div class="test-container">
+        <div class="test-title">2. Mobile Video Show</div>
+        <iframe src="https://m.weibo.cn/s/video/show?object_id=1034:5205158733480074" 
+                allow="autoplay; encrypted-media; picture-in-picture" 
+                allowfullscreen
+                referrerpolicy="no-referrer-when-downgrade"></iframe>
+    </div>
+    
+    <div class="test-container">
+        <div class="test-title">3. TV Show with MID</div>
+        <iframe src="https://weibo.com/tv/show/1034:5205158733480074?mid=5205401983519324" 
+                allow="autoplay; encrypted-media; picture-in-picture" 
+                allowfullscreen
+                referrerpolicy="no-referrer-when-downgrade"></iframe>
+    </div>
+    
+    <div class="test-container">
+        <div class="test-title">4. Player Format</div>
+        <iframe src="https://weibo.com/tv/player/1034:5205158733480074" 
+                allow="autoplay; encrypted-media; picture-in-picture" 
+                allowfullscreen
+                referrerpolicy="no-referrer-when-downgrade"></iframe>
+    </div>
+
+    <div class="test-container">
+        <div class="test-title">5. Direct Video Status</div>
+        <iframe src="https://m.weibo.cn/detail/5205401983519324" 
+                allow="autoplay; encrypted-media; picture-in-picture" 
+                allowfullscreen
+                referrerpolicy="no-referrer-when-downgrade"></iframe>
+    </div>
+    
+    <script>
+        // Log iframe load events
+        document.querySelectorAll('iframe').forEach((iframe, index) => {
+            iframe.onload = () => console.log(`Iframe ${index + 1} loaded successfully`);
+            iframe.onerror = (e) => console.log(`Iframe ${index + 1} failed to load:`, e);
+        });
+    </script>
+</body>
+</html>

@@ -4,6 +4,9 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { ExternalLink, Heart, MessageCircle, Share2, Play } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+import WeiboVideoPlayer from './WeiboVideoPlayer'
+import DouyinVideoPlayer from './DouyinVideoPlayer'
+import RedNotesPlayer from './RedNotesPlayer'
 
 interface MediaItem {
   type: 'image' | 'video'
@@ -72,6 +75,17 @@ const platformConfig = {
 export default function FeedCard({ post, onMediaClick }: FeedCardProps) {
   const [imageLoaded, setImageLoaded] = useState<{ [key: number]: boolean }>({})
   const config = platformConfig[post.platform]
+  
+  // Debug logging for RedNotes posts
+  if (post.platform === 'red') {
+    console.log('🔍 FeedCard RedNotes Debug:', {
+      platform: post.platform,
+      mediaCount: post.media.length,
+      firstMediaType: post.media[0]?.type,
+      allMediaTypes: post.media.map(m => m.type),
+      hasVideoInMedia: post.media.some(m => m.type === 'video')
+    })
+  }
   
   const handleMediaClick = (index: number) => {
     if (post.media.length > 0) {
@@ -162,27 +176,27 @@ export default function FeedCard({ post, onMediaClick }: FeedCardProps) {
                     />
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 rounded-lg" />
                   </div>
-                ) : post.media[0]?.isIframe ? (
-                  // Video placeholder with link to original post (Weibo blocks iframe embedding)
-                  <div className="relative">
-                    <a 
-                      href={post.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block"
-                    >
-                      <div className="w-full h-80 bg-gradient-to-br from-gray-900 to-gray-700 rounded-lg flex items-center justify-center group hover:from-blue-900 hover:to-blue-700 transition-all duration-300">
-                        <div className="text-center text-white">
-                          <div className="bg-white/20 rounded-full p-4 mb-4 group-hover:bg-white/30 transition-colors">
-                            <Play size={32} className="text-white ml-1" />
-                          </div>
-                          <p className="text-lg font-medium mb-2">Kelly Yu Wenwen Video</p>
-                          <p className="text-sm opacity-80">Click to watch on Weibo</p>
-                          <p className="text-xs opacity-60 mt-2">🎥 Original video content</p>
-                        </div>
-                      </div>
-                    </a>
-                  </div>
+                ) : post.media[0]?.isIframe || post.platform === 'douyin' || post.platform === 'red' ? (
+                  // Use appropriate video player based on platform
+                  post.platform === 'douyin' ? (
+                    <DouyinVideoPlayer 
+                      src={post.media[0].src ?? ''} 
+                      originalUrl={post.url}
+                      thumbnail={post.media[0]?.poster}
+                    />
+                  ) : post.platform === 'red' ? (
+                    <RedNotesPlayer 
+                      src={post.media[0].src ?? ''} 
+                      originalUrl={post.url}
+                      thumbnail={post.media[0]?.poster}
+                      hasVideo={true} // Force video for RedNotes since they're primarily video content
+                    />
+                  ) : (
+                    <WeiboVideoPlayer 
+                      src={post.media[0].src ?? ''} 
+                      originalUrl={post.url}
+                    />
+                  )
                 ) : (
                   // Regular video file
                   <div className="relative">
@@ -234,22 +248,12 @@ export default function FeedCard({ post, onMediaClick }: FeedCardProps) {
                         )}
                       </div>
                     ) : media.isIframe ? (
-                      // Iframe video thumbnail (click to view in lightbox)
+                      // Iframe video thumbnail for grid view
                       <div className="relative">
-                        {media.poster ? (
-                          <img
-                            src={media.poster ?? undefined}
-                            alt={`${post.author} video ${index + 1}`}
-                            className="w-full h-32 sm:h-40 object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                        ) : (
-                          <div className="w-full h-32 sm:h-40 bg-gray-900 flex items-center justify-center">
-                            <Play size={24} className="text-white" />
-                          </div>
-                        )}
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors duration-300">
-                          <div className="bg-white/90 rounded-full p-2 group-hover:scale-110 transition-transform duration-300">
-                            <Play size={16} className="text-gray-800 ml-0.5" />
+                        <div className="w-full h-32 sm:h-40 bg-gray-900 flex items-center justify-center rounded overflow-hidden">
+                          <div className="text-center text-white">
+                            <Play size={20} className="text-white mx-auto mb-1" />
+                            <p className="text-xs">Video</p>
                           </div>
                         </div>
                       </div>

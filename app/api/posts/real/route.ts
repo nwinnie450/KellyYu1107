@@ -83,8 +83,9 @@ export async function GET(request: NextRequest) {
         text: post.text,
         media: post.media.map(m => ({
           type: m.type,
-          src: m.originalSrc ? `/api/media-proxy?url=${encodeURIComponent(m.originalSrc)}` : m.src,
-          alt: m.alt || 'Kelly Yu Wenwen post media'
+          src: m.isIframe ? m.src : (m.originalSrc ? `/api/media-proxy?url=${encodeURIComponent(m.originalSrc)}` : m.src),
+          alt: m.alt || 'Kelly Yu Wenwen post media',
+          isIframe: m.isIframe
         })),
         url: post.url,
         publishedAt: post.publishedAt,
