@@ -1,117 +1,146 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+function tryParseRenderData(html: string) {
+  // Douyin often stores URI-encoded JSON here
+  const m = html.match(/<script[^>]*id="RENDER_DATA"[^>]*>(.*?)<\/script>/);
+  if (!m) return null;
+  try {
+    return JSON.parse(decodeURIComponent(m[1]));
+  } catch {
+    return null;
+  }
+}
+
+function tryParseSigiState(html: string) {
+  // Older/alt structure
+  const m = html.match(/<script[^>]*id="SIGI_STATE"[^>]*>(.*?)<\/script>/);
+  if (!m) return null;
+  try {
+    return JSON.parse(m[1]);
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get('url');
-  if (!url) {
-    return NextResponse.json({ error: 'missing url parameter' }, { status: 400 });
-  }
+  if (!url) return NextResponse.json({ error: 'missing url' }, { status: 400 });
 
   try {
-    console.log('🎵 Resolving Douyin URL for text extraction:', url);
+    console.log('🎵 Resolving Douyin URL:', url);
 
-    // 1) Follow redirects to real item URL
-    const response = await fetch(url, {
+    // 1) Follow redirects from v.douyin.com
+    const r = await fetch(url, {
       redirect: 'follow',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-        'Cache-Control': 'no-cache'
-      },
+        // Pretend to be a normal browser; Douyin is finicky about UA/Language
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
+      }
     });
 
-    const html = await response.text();
-    console.log('📄 Fetched HTML content, length:', html.length);
+    const finalUrl = r.url; // resolved item page
+    const html = await r.text();
+    console.log('📄 Resolved to:', finalUrl, 'HTML length:', html.length);
 
-    // 2) Parse in-page JSON. Douyin commonly embeds JSON in a script tag like RENDER_DATA/SIGI_STATE.
-    let data: any = null;
-    let desc = '';
-    let author = '';
-    let publishedAt = '';
-    
-    // Try different JSON extraction patterns
-    const patterns = [
-      /<script[^>]*id="RENDER_DATA"[^>]*>(.*?)<\/script>/,
-      /<script[^>]*id="SIGI_STATE"[^>]*>(.*?)<\/script>/,
-      /window\._ROUTER_DATA\s*=\s*({.*?});/,
-      /self\.__pace_f\.push\(\[.*?,.*?,.*?,.*?,({.*?}),.*?\]\)/
-    ];
-
-    for (const pattern of patterns) {
-      const match = html.match(pattern);
-      if (match) {
-        try {
-          // It's often URI-encoded JSON
-          let jsonStr = match[1];
-          if (jsonStr.includes('%')) {
-            jsonStr = decodeURIComponent(jsonStr);
-          }
-          data = JSON.parse(jsonStr);
-          console.log('✅ Successfully parsed JSON data using pattern:', pattern.toString().slice(0, 50) + '...');
-          break;
-        } catch (parseError) {
-          console.log('❌ Failed to parse JSON from pattern, trying next...');
-          continue;
-        }
-      }
-    }
-
+    // 2) Parse embedded JSON
+    let data: any = tryParseRenderData(html) ?? tryParseSigiState(html);
     if (!data) {
       console.log('⚠️ No JSON data found, trying meta tags fallback');
       // Fallback to meta tags
       const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/) ||
                         html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]*)"/) ||
                         html.match(/<meta[^>]*name="title"[^>]*content="([^"]*)"/);
-      if (titleMatch) {
-        desc = titleMatch[1].trim().replace(/\s*-\s*抖音$/, ''); // Remove "- 抖音" suffix
-      }
-
-      const authorMatch = html.match(/<meta[^>]*property="og:site_name"[^>]*content="([^"]*)"/) ||
-                         html.match(/<meta[^>]*name="author"[^>]*content="([^"]*)"/);
-      if (authorMatch) {
-        author = authorMatch[1].trim();
-      }
-
+      const desc = titleMatch ? titleMatch[1].trim().replace(/\s*-\s*抖音$/, '') : '无法获取完整描述';
+      
       return NextResponse.json({ 
-        desc: desc || '无法获取完整描述',
-        author: author || 'Douyin用户',
-        publishedAt: '',
+        finalUrl,
+        desc,
+        author: 'Douyin用户',
+        createTime: null,
         method: 'meta-tags-fallback'
       });
     }
 
-    // 3) Walk the JSON to find description & metadata
-    // Note: These keys change frequently—adjust as needed
-    try {
-      // Try different data structure patterns
-      const awemeList = data?.[0]?.aweme || data?.aweme || data?.detail?.aweme || data?.video || data?.item;
-      const awemeData = Array.isArray(awemeList) ? awemeList[0] : awemeList;
-      
-      if (awemeData) {
-        desc = awemeData.desc || awemeData.title || awemeData.content || '';
-        author = awemeData.author?.nickname || awemeData.author?.unique_id || awemeData.nickname || '';
-        publishedAt = awemeData.create_time ? new Date(awemeData.create_time * 1000).toISOString() : '';
+    // 3) Extract fields (structure changes; probe a few likely paths)
+    const nodes = Array.isArray(data) ? data : [data];
+    let aweme: any;
+
+    // RENDER_DATA style
+    for (const n of nodes) {
+      if (n?.aweme?.aweme_id || n?.aweme?.desc || n?.aweme?.video) {
+        aweme = n.aweme;
+        break;
       }
-
-      // Alternative data structures
-      if (!desc && data.app) {
-        desc = data.app.videoData?.desc || data.app.itemInfo?.itemStruct?.desc || '';
-        author = data.app.videoData?.authorInfo?.nickName || data.app.itemInfo?.itemStruct?.author?.nickname || '';
+      if (n?.detail?.aweme) {
+        aweme = n.detail.aweme;
+        break;
       }
-
-      console.log('📝 Extracted data:', { desc: desc.slice(0, 100), author, publishedAt });
-
-    } catch (extractError) {
-      console.log('❌ Error extracting from JSON structure:', extractError);
     }
 
-    // Return what we found
+    // SIGI_STATE style (keys vary, but often contain an "aweme" or "Aweme" map)
+    if (!aweme && data?.Aweme?.aweme_list) {
+      const list = Object.values<any>(data.Aweme.aweme_list);
+      if (list.length) aweme = list[0];
+    }
+
+    if (!aweme) {
+      console.log('❌ No aweme data found in parsed JSON');
+      return NextResponse.json({ 
+        error: 'no-aweme', 
+        finalUrl,
+        desc: '无法获取完整描述',
+        author: 'Douyin用户',
+        createTime: null,
+        method: 'no-aweme-fallback'
+      }, { status: 404 });
+    }
+
+    const desc =
+      aweme.desc ||
+      aweme.share_info?.share_desc ||
+      aweme.share_info?.share_title ||
+      '无法获取完整描述';
+
+    // Prefer non-watermarked play URL if present; otherwise fallback
+    const playUrl =
+      aweme.video?.play_addr?.url_list?.[0] ||
+      aweme.video?.bit_rate?.[0]?.play_addr?.url_list?.[0] ||
+      '';
+
+    const cover =
+      aweme.video?.cover?.url_list?.[0] ||
+      aweme.video?.origin_cover?.url_list?.[0] ||
+      '';
+
+    const author = aweme.author?.nickname || 'Douyin用户';
+    const avatar =
+      aweme.author?.avatar_thumb?.url_list?.[0] ||
+      aweme.author?.avatar_medium?.url_list?.[0] ||
+      '';
+
+    // Publish time (epoch seconds) → ISO
+    const createTime =
+      aweme.create_time ? new Date(aweme.create_time * 1000).toISOString() : null;
+
+    console.log('✅ Successfully extracted:', { 
+      desc: desc.slice(0, 100) + '...', 
+      author, 
+      createTime,
+      hasPlayUrl: !!playUrl,
+      hasCover: !!cover 
+    });
+
     return NextResponse.json({
-      desc: desc || '无法获取完整描述',
-      author: author || 'Douyin用户',
-      publishedAt: publishedAt,
+      finalUrl,
+      desc,          // ← full caption (no "..."—this is what you want)
+      playUrl,       // direct file (may still require proxying)
+      cover,
+      author,
+      avatar,
+      createTime,
       method: 'json-extraction',
-      success: !!desc
+      success: true
     });
 
   } catch (error) {
@@ -120,7 +149,7 @@ export async function GET(req: NextRequest) {
       error: 'failed to resolve douyin url',
       desc: '无法获取描述',
       author: 'Douyin用户',
-      publishedAt: '',
+      createTime: null,
       method: 'error-fallback'
     }, { status: 500 });
   }
