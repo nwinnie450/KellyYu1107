@@ -95,7 +95,7 @@ const nextConfig = {
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
               "style-src 'self' 'unsafe-inline' https:",
               "connect-src 'self' https: data:",
-              "frame-src https://m.weibo.cn https://*.weibo.cn https://weibo.com https://*.weibo.com",
+              "frame-src 'self' https://m.weibo.cn https://*.weibo.cn https://weibo.com https://*.weibo.com https://www.douyin.com https://*.douyin.com https://v.douyin.com https://www.xiaohongshu.com https://*.xiaohongshu.com https://*.xhscdn.com",
             ].join("; "),
           },
         ],

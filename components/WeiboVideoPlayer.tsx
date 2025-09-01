@@ -9,7 +9,7 @@ interface WeiboVideoPlayerProps {
   originalUrl?: string
 }
 
-// Convert various Weibo URLs to the most reliable embed format
+// Convert various Weibo URLs to H5 iframe embed format
 function getBestEmbedUrl(src: string): string {
   try {
     // Extract object_id from various formats
@@ -27,11 +27,15 @@ function getBestEmbedUrl(src: string): string {
       // Format: https://weibo.com/tv/player/1034:5205158733480074
       const match = src.match(/\/tv\/player\/([^?&]+)/)
       objectId = match ? match[1] : ''
+    } else if (src.includes('/status/')) {
+      // Extract from status URLs like https://weibo.com/6465429977/5205401983519324
+      // This would need to be resolved to get the object_id
+      return src // For now, return original and let iframe handle it
     }
     
     if (objectId) {
-      // Use the TV show format which you confirmed works
-      return `https://weibo.com/tv/show/${objectId}`
+      // Use the H5 mobile player format for better iframe compatibility
+      return `https://m.weibo.cn/s/video/show?object_id=${encodeURIComponent(objectId)}`
     }
     
     return src // Return original if we can't parse it
@@ -51,7 +55,7 @@ export default function WeiboVideoPlayer({ src, originalUrl }: WeiboVideoPlayerP
       if (!iframeLoaded) {
         setShowFallback(true)
       }
-    }, 3000) // 3 seconds timeout
+    }, 5000) // 5 seconds timeout for iframe loading
 
     return () => clearTimeout(timer)
   }, [iframeLoaded])
@@ -103,14 +107,14 @@ export default function WeiboVideoPlayer({ src, originalUrl }: WeiboVideoPlayerP
     )
   }
 
-  // Try iframe embedding first
+  // Iframe-only rendering for Weibo H5 player
   return (
     <div className="aspect-video w-full overflow-hidden rounded-2xl border relative bg-gray-100">
       {!iframeLoaded && (
         <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
-            <p className="text-gray-600 text-sm">Loading video...</p>
+            <p className="text-gray-600 text-sm">Loading Weibo video...</p>
           </div>
         </div>
       )}
@@ -118,16 +122,16 @@ export default function WeiboVideoPlayer({ src, originalUrl }: WeiboVideoPlayerP
         src={embedUrl}
         className="h-full w-full rounded-2xl"
         allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-        referrerPolicy="no-referrer-when-downgrade"
+        referrerPolicy="no-referrer"
+        sandbox="allow-scripts allow-same-origin allow-presentation"
         onLoad={() => {
-          console.log('✅ Weibo iframe loaded successfully:', embedUrl)
+          console.log('✅ Weibo H5 iframe loaded:', embedUrl)
           setIframeLoaded(true)
         }}
         onError={(e) => {
-          console.log('❌ Weibo iframe failed to load:', embedUrl, e)
+          console.log('❌ Weibo H5 iframe failed:', embedUrl, e)
           setIframeFailed(true)
         }}
-        style={{ display: iframeLoaded && !iframeFailed ? 'block' : 'none' }}
       />
     </div>
   )

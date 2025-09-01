@@ -17,6 +17,7 @@ interface RealKellyPost {
     src: string
     originalSrc?: string
     alt?: string
+    isIframe?: boolean
   }>
   url: string
   publishedAt: string // Exact time from Weibo
