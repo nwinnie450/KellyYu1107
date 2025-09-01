@@ -161,10 +161,10 @@ export default function RealPostsAdmin() {
         setNewPost(prev => ({
           ...prev,
           platform: 'douyin',
-          text: data.scrapedText || data.originalText || data.text || prev.text,
-          originalText: data.scrapedText || data.originalText || prev.originalText,
+          text: data.text || data.scrapedText || data.originalText || prev.text,
+          originalText: data.text || data.scrapedText || data.originalText || prev.originalText,
           url: data.source_url || prev.url,
-          publishedAt: prev.publishedAt, // Don't auto-set date from share text - needs manual input
+          publishedAt: data.bestPublishDate || prev.publishedAt, // Use extracted date if available
           engagement: data.scrapedEngagement || prev.engagement || { likes: 0, comments: 0, shares: 0 },
           media: data.videoMedia ? [data.videoMedia] : [{
             type: 'video' as const,

@@ -21,31 +21,21 @@ export async function POST(req: Request) {
       });
     }
     
-    // Enhanced server-side URL resolution with metadata extraction using new robust API
+    // Enhanced server-side URL resolution with metadata extraction (keeping working method)
     console.log('🎵 Starting enhanced Douyin URL resolution for:', videoUrl);
     let resolvedMetadata: any = {};
     let finalVideoUrl = videoUrl;
     
     try {
-      const resolveResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/douyin/resolve?url=${encodeURIComponent(videoUrl)}`);
-      if (resolveResponse.ok) {
-        const resolveResult = await resolveResponse.json();
-        if (resolveResult.success) {
-          finalVideoUrl = resolveResult.finalUrl;
-          resolvedMetadata = {
-            title: resolveResult.desc,
-            author: resolveResult.author,
-            publishedAt: resolveResult.createTime,
-            description: resolveResult.desc,
-            thumbnail: resolveResult.cover,
-            avatar: resolveResult.avatar
-          };
-          console.log('✅ Enhanced URL resolution successful with robust API:', {
-            originalUrl: videoUrl,
-            resolvedUrl: finalVideoUrl,
-            extractedMetadata: resolvedMetadata
-          });
-        }
+      const resolveResult = await resolveDouyinUrlWithMetadata(videoUrl);
+      if (resolveResult) {
+        finalVideoUrl = resolveResult.resolvedUrl;
+        resolvedMetadata = resolveResult.metadata || {};
+        console.log('✅ Enhanced URL resolution successful:', {
+          originalUrl: videoUrl,
+          resolvedUrl: finalVideoUrl,
+          extractedMetadata: resolvedMetadata
+        });
       }
     } catch (resolveError) {
       console.log('⚠️ Enhanced resolution failed, using original URL:', resolveError);
@@ -54,15 +44,66 @@ export async function POST(req: Request) {
     // Get video embed info
     const embed = await getDouyinVideoAutoEmbed(finalVideoUrl);
     
-    // Use the best available text content, prioritizing resolved metadata
-    let bestText = resolvedMetadata.title || 
-                  resolvedMetadata.description || 
-                  parsedInfo.originalText || 
-                  parsedInfo.title || 
-                  shareText || "";
+    // Use the best available text content, prioritizing resolved metadata over truncated parsed text
+    let bestText = "";
+    let extractedDate = null;
+    
+    // Priority 1: Full resolved metadata (complete text)
+    if (resolvedMetadata.title && resolvedMetadata.title.length > 50) {
+      bestText = resolvedMetadata.title;
+    } else if (resolvedMetadata.description && resolvedMetadata.description.length > 50) {
+      bestText = resolvedMetadata.description;
+    }
+    // Priority 2: Only use parsed text if no good resolved data
+    else if (parsedInfo.originalText && parsedInfo.originalText.length > 20) {
+      bestText = parsedInfo.originalText;
+    } else if (parsedInfo.title && parsedInfo.title.length > 20) {
+      bestText = parsedInfo.title;
+    }
+    // Priority 3: Fallback to share text
+    else {
+      bestText = shareText || "";
+    }
+    
+    // Smart text processing: Extract date and clean promotional content
+    if (bestText && bestText.includes('Kelly于文文于')) {
+      // Extract date from text like "Kelly于文文于20250313发布在抖音"
+      const dateMatch = bestText.match(/Kelly于文文于(\d{8})发布在抖音/);
+      if (dateMatch) {
+        const dateStr = dateMatch[1]; // 20250313
+        const year = dateStr.substring(0, 4);
+        const month = dateStr.substring(4, 6);
+        const day = dateStr.substring(6, 8);
+        extractedDate = `${year}-${month}-${day}T04:00:00.000Z`; // Default to 4am UTC for Douyin posts
+        console.log('📅 Extracted date from text:', extractedDate);
+      }
+      
+      // Clean the text by removing promotional metadata
+      const cleanText = bestText
+        .split(' - Kelly于文文于')[0] // Remove everything after the author signature
+        .trim();
+      
+      if (cleanText !== bestText) {
+        bestText = cleanText;
+        console.log('🧹 Cleaned text:', bestText);
+      }
+    }
                   
-    // Use resolved metadata for publish date if available
-    let bestPublishDate = resolvedMetadata.publishedAt || parsedInfo.publishDate;
+    console.log('🎯 Text selection debug:', {
+      resolvedTitle: resolvedMetadata.title,
+      resolvedDescription: resolvedMetadata.description,
+      parsedOriginal: parsedInfo.originalText,
+      parsedTitle: parsedInfo.title,
+      shareText: shareText,
+      finalBestText: bestText,
+      selectedSource: resolvedMetadata.title && resolvedMetadata.title.length > 50 ? 'resolved-title' :
+                      resolvedMetadata.description && resolvedMetadata.description.length > 50 ? 'resolved-description' :
+                      parsedInfo.originalText && parsedInfo.originalText.length > 20 ? 'parsed-original' :
+                      parsedInfo.title && parsedInfo.title.length > 20 ? 'parsed-title' : 'shareText-fallback'
+    });
+                  
+    // Use resolved metadata for publish date if available, prioritizing extracted date
+    let bestPublishDate = extractedDate || resolvedMetadata.publishedAt || parsedInfo.publishDate;
     
     // Try legacy scraping as fallback
     let scrapedData = null;
