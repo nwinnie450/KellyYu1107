@@ -225,18 +225,18 @@ export default function RealPostsAdmin() {
           mediaObjects: data.mediaObjects
         })
         
-        // Use better text content - prefer parsed info over scraped
-        const finalText = data.originalText || data.text || `Kelly于文文最新小红书分享`;
+        // Use better text content - prioritize resolved complete text over truncated original
+        const finalText = data.text || data.originalText || `Kelly于文文最新小红书分享`;
         const isVideo = data.hasVideo || videoOverride;
         
-        // Update form with parsed and scraped data
+        // Update form with resolved and scraped data
         setNewPost(prev => ({
           ...prev,
           platform: 'red',
           text: finalText,
           originalText: finalText,
           url: data.source_url || prev.url,
-          publishedAt: prev.publishedAt, // Don't auto-set date from share text - needs manual input
+          publishedAt: data.bestPublishDate || prev.publishedAt, // Use extracted date if available
           engagement: data.scrapedEngagement || prev.engagement || { likes: 0, comments: 0, shares: 0 },
           media: [{
             type: (isVideo ? 'video' : 'image') as const,

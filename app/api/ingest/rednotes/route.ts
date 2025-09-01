@@ -31,21 +31,38 @@ export async function POST(req: Request) {
       });
     }
     
-    // Enhanced server-side URL resolution with metadata extraction
+    // Enhanced server-side URL resolution with metadata extraction using robust XHS API
     console.log('🌹 Starting enhanced RedNotes URL resolution for:', noteUrl);
     let resolvedMetadata: any = {};
     let finalNoteUrl = noteUrl;
     
     try {
-      const resolveResult = await resolveRedNotesUrlWithMetadata(noteUrl);
-      if (resolveResult) {
-        finalNoteUrl = resolveResult.resolvedUrl;
-        resolvedMetadata = resolveResult.metadata || {};
-        console.log('✅ Enhanced RedNotes URL resolution successful:', {
-          originalUrl: noteUrl,
-          resolvedUrl: finalNoteUrl,
-          extractedMetadata: resolvedMetadata
-        });
+      const resolveResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/xhs/resolve?url=${encodeURIComponent(noteUrl)}`);
+      if (resolveResponse.ok) {
+        const resolveResult = await resolveResponse.json();
+        console.log('🔍 XHS API Response received:', resolveResult);
+        if (resolveResult.success !== false && resolveResult.desc) { // Check for actual data
+          finalNoteUrl = resolveResult.finalUrl || noteUrl;
+          resolvedMetadata = {
+            title: resolveResult.title,
+            author: resolveResult.author,
+            publishedAt: resolveResult.publishTime,
+            description: resolveResult.desc,
+            thumbnail: resolveResult.cover,
+            avatar: resolveResult.avatar,
+            contentType: resolveResult.videoUrl ? 'video' : 'image',
+            hasVideo: !!resolveResult.videoUrl,
+            images: resolveResult.images || [],
+            videoUrl: resolveResult.videoUrl
+          };
+          console.log('✅ Enhanced RedNotes URL resolution successful with robust API:', {
+            originalUrl: noteUrl,
+            resolvedUrl: finalNoteUrl,
+            extractedMetadata: resolvedMetadata
+          });
+        } else {
+          console.log('⚠️ XHS API response did not contain expected data:', resolveResult);
+        }
       }
     } catch (resolveError) {
       console.log('⚠️ Enhanced resolution failed, using original URL:', resolveError);
@@ -54,15 +71,59 @@ export async function POST(req: Request) {
     // Get note embed info
     const embed = await getRedNotesAutoEmbed(finalNoteUrl);
     
-    // Use the best available text content, prioritizing resolved metadata
-    let bestText = resolvedMetadata.title || 
-                  resolvedMetadata.description || 
-                  parsedInfo.originalText || 
-                  parsedInfo.description || 
-                  shareText || "";
+    // Use the best available text content, prioritizing resolved metadata with smart processing
+    let bestText = "";
+    let extractedDate = null;
+    
+    // Priority 1: Full resolved metadata (complete text)
+    if (resolvedMetadata.title && resolvedMetadata.title.length > 20) {
+      bestText = resolvedMetadata.title;
+    } else if (resolvedMetadata.description && resolvedMetadata.description.length > 20) {
+      bestText = resolvedMetadata.description;
+    }
+    // Priority 2: Only use parsed text if no good resolved data
+    else if (parsedInfo.originalText && parsedInfo.originalText.length > 10) {
+      bestText = parsedInfo.originalText;
+    } else if (parsedInfo.description && parsedInfo.description.length > 10) {
+      bestText = parsedInfo.description;
+    }
+    // Priority 3: Fallback to share text
+    else {
+      bestText = shareText || "";
+    }
+    
+    // Smart text processing for XHS: clean promotional content and extract date patterns
+    if (bestText) {
+      // Look for common XHS promotional patterns and clean them
+      bestText = bestText
+        .replace(/\s*-\s*小红书.*$/, '') // Remove "- 小红书" and everything after
+        .replace(/来小红书.*$/, '') // Remove promotional endings
+        .replace(/.*赞.*收藏.*评论.*$/, '') // Remove engagement lines
+        .trim();
+      
+      // Try to extract dates from various patterns (XHS doesn't have as consistent format as Douyin)
+      const datePatterns = [
+        /(\d{4})[-年]\s*(\d{1,2})[-月]\s*(\d{1,2})[日]?/,
+        /(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/,
+      ];
+      
+      for (const pattern of datePatterns) {
+        const match = bestText.match(pattern);
+        if (match) {
+          const year = match[1];
+          const month = match[2].padStart(2, '0');
+          const day = match[3].padStart(2, '0');
+          extractedDate = `${year}-${month}-${day}T10:00:00.000Z`; // Default to 10am UTC for XHS posts
+          console.log('📅 Extracted date from XHS text:', extractedDate);
+          break;
+        }
+      }
+      
+      console.log('🧹 Processed XHS text:', bestText.slice(0, 100) + '...');
+    }
                   
-    // Use resolved metadata for publish date if available
-    let bestPublishDate = resolvedMetadata.publishedAt || parsedInfo.publishDate;
+    // Use resolved metadata for publish date if available, prioritizing extracted date
+    let bestPublishDate = extractedDate || resolvedMetadata.publishedAt || parsedInfo.publishDate;
     
     // Determine video/content type from resolved metadata or parsed info
     let hasVideo = resolvedMetadata.hasVideo || parsedInfo.hasVideo || false;
@@ -102,6 +163,18 @@ export async function POST(req: Request) {
     } catch (scrapeError) {
       console.log('⚠️ Legacy scraping failed:', scrapeError);
     }
+    
+    // Debug logging for text selection
+    console.log('🎯 XHS Text selection debug:', {
+      resolvedTitle: resolvedMetadata.title,
+      resolvedDescription: resolvedMetadata.description,
+      parsedOriginal: parsedInfo.originalText,
+      parsedDescription: parsedInfo.description,
+      shareText: shareText,
+      finalBestText: bestText,
+      extractedDate: extractedDate,
+      bestPublishDate: bestPublishDate
+    });
     
     // RedNotes can contain images, videos, or mixed content
     const mediaObjects = [];
@@ -158,7 +231,8 @@ export async function POST(req: Request) {
       // Pre-filled form data
       platform: "red", // Use "red" to match existing platform config
       text: bestText,
-      bestPublishDate: bestPublishDate
+      bestPublishDate: bestPublishDate,
+      extractedDate: extractedDate
     });
     
   } catch (error) {
