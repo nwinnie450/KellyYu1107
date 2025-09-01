@@ -54,10 +54,15 @@ export default function DouyinVideoPlayer({ src, originalUrl, thumbnail }: Douyi
             </div>
             
             <h3 className="text-lg font-bold tracking-wide">Kelly Yu Wenwen</h3>
-            <p className="text-sm text-pink-200 flex items-center justify-center mt-2">
-              <ExternalLink size={14} className="mr-1" />
-              Watch on Douyin
-            </p>
+            <div className="flex items-center justify-center gap-2 mt-3">
+              <div className="bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5 flex items-center gap-1.5">
+                <span className="text-white text-xs font-medium">🎵 抖音</span>
+              </div>
+              <div className="bg-pink-500/20 backdrop-blur-sm rounded-full px-3 py-1.5 flex items-center gap-1.5 group-hover:bg-pink-400/30 transition-colors">
+                <ExternalLink size={12} className="text-pink-200" />
+                <span className="text-pink-100 text-xs font-medium">Watch Original</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -147,10 +152,15 @@ export default function DouyinVideoPlayer({ src, originalUrl, thumbnail }: Douyi
           </div>
           
           <h3 className="text-lg font-bold tracking-wide">Kelly Yu Wenwen</h3>
-          <p className="text-sm text-pink-200 flex items-center justify-center mt-2">
-            <ExternalLink size={14} className="mr-1" />
-            Watch on Douyin
-          </p>
+          <div className="flex items-center justify-center gap-2 mt-3">
+            <div className="bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5 flex items-center gap-1.5">
+              <span className="text-white text-xs font-medium">🎵 抖音</span>
+            </div>
+            <div className="bg-pink-500/20 backdrop-blur-sm rounded-full px-3 py-1.5 flex items-center gap-1.5 group-hover:bg-pink-400/30 transition-colors">
+              <ExternalLink size={12} className="text-pink-200" />
+              <span className="text-pink-100 text-xs font-medium">Watch Original</span>
+            </div>
+          </div>
         </div>
       </div>
 

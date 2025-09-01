@@ -74,6 +74,7 @@ const platformConfig = {
 
 export default function FeedCard({ post, onMediaClick }: FeedCardProps) {
   const [imageLoaded, setImageLoaded] = useState<{ [key: number]: boolean }>({})
+  const [textExpanded, setTextExpanded] = useState(false)
   const config = platformConfig[post.platform]
   
   // Debug logging for RedNotes posts
@@ -94,18 +95,28 @@ export default function FeedCard({ post, onMediaClick }: FeedCardProps) {
   }
 
   const formatText = (text: string) => {
-    // Truncate long text on mobile, show full on desktop
-    const maxLength = 150
-    if (text.length <= maxLength) return text
+    const maxLength = 200
+    const shouldTruncate = text.length > maxLength
     
-    return (
-      <div className="space-y-2">
-        <div className="sm:hidden">
-          {text.substring(0, maxLength)}...
-        </div>
-        <div className="hidden sm:block">
+    if (!shouldTruncate) {
+      return (
+        <div className="whitespace-pre-wrap leading-relaxed">
           {text}
         </div>
+      )
+    }
+    
+    return (
+      <div className="space-y-3">
+        <div className="whitespace-pre-wrap leading-relaxed">
+          {textExpanded ? text : `${text.substring(0, maxLength)}...`}
+        </div>
+        <button
+          onClick={() => setTextExpanded(!textExpanded)}
+          className="text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
+        >
+          {textExpanded ? '收起' : '展开'}
+        </button>
       </div>
     )
   }
